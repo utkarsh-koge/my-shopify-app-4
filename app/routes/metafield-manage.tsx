@@ -344,7 +344,6 @@ export default function SingleMetafieldViewer() {
         setCsvData(0);
       },
     });
-
   };
 
   const handleupdateCSVUpload = async (e) => {
@@ -456,7 +455,9 @@ export default function SingleMetafieldViewer() {
 
     // CSV required for BOTH: specific delete AND update
     if (["specific", "update"].includes(removeMode) && !csvRows.length) {
-      return alert(`Upload a CSV file with ${specificField}'s (and values for update)!`);
+      return alert(
+        `Upload a CSV file with ${specificField}'s (and values for update)!`,
+      );
     }
 
     setModalState({ isOpen: true });
@@ -484,7 +485,7 @@ export default function SingleMetafieldViewer() {
       setIsDeleting(true); // Triggers sequential delete loop via useEffect
     }
   };
-  
+
   const resetToHome = () => {
     setSelectedMetafield(null);
     setCsvRows([]);
@@ -496,9 +497,8 @@ export default function SingleMetafieldViewer() {
     setCurrentIndex(0);
     setAccumulatedResults([]);
     setResourceCount(0);
-    setHasSearched(false);
     // navigate(0)
-  };;
+  };
 
   console.log(results, ".......progress");
   useEffect(() => {
@@ -695,7 +695,8 @@ export default function SingleMetafieldViewer() {
       const TrueResult = results.filter((r) => r?.success);
       console.log("we arehereeeeeeeeeeeee", TrueResult);
       const Data = {
-        operation: "Metafield-removed", objectType,
+        operation: "Metafield-removed",
+        objectType,
         value: TrueResult,
       };
       if (TrueResult.length > 0) {

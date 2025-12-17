@@ -484,7 +484,7 @@ export default function SingleMetafieldViewer() {
       setIsDeleting(true); // Triggers sequential delete loop via useEffect
     }
   };
-
+  
   const resetToHome = () => {
     setSelectedMetafield(null);
     setCsvRows([]);
@@ -496,8 +496,9 @@ export default function SingleMetafieldViewer() {
     setCurrentIndex(0);
     setAccumulatedResults([]);
     setResourceCount(0);
+    setHasSearched(false);
     // navigate(0)
-  };
+  };;
 
   console.log(results, ".......progress");
   useEffect(() => {

@@ -521,10 +521,10 @@ export default function TagManager() {
   /* ---------------- MODAL ---------------- */
   const openRemoveModal = () => {
     // CSV required for BOTH: specific delete AND update
-    if (!csvIds.length) {
+    if (!csvIds.length && removalMode !== "global") {
       return alert(`Upload a CSV file with ${specificField}'s`);
     }
-    setModalState({ isOpen: true })
+    setModalState({ isOpen: true });
   };
 
   /* ---------------- CONFIRM REMOVAL ---------------- */
@@ -1047,3 +1047,4 @@ export default function TagManager() {
     </AppProvider>
   );
 }
+

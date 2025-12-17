@@ -717,6 +717,18 @@ export default function TagManager() {
             </select>
           </div>
 
+
+          {/* PRODUCT INDEXING ALERT */}
+          {objectType === "product" && (
+            <div className="mt-2 p-2 text-orange-700 text-sm">
+              <strong>Note:</strong> For products only.
+              <br />
+              1. After adding a tag, it may take 2–5 minutes to appear here.
+              <br />
+              2. After removing a tag, it may take 2–5 minutes to disappear here.
+            </div>
+          )}
+
           {/* CONDITIONS */}
           <div className="mt-4 space-y-3">
             {conditions.map((c, i) => {

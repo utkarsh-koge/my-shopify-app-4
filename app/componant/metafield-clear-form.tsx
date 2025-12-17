@@ -8,40 +8,50 @@ export const MetafieldFetcherUI = ({
   isDeleting,
   metafields,
   resetToHome,
+  hasSearched,
 }) => (
-  <div className="flex items-center gap-3 mb-4">
-    {metafields.length === 0 ? (
-      <div className="flex items-center gap-3 mb-4">
-        <select
-          value={objectType}
-          onChange={(e) => setObjectType(e.target.value)}
-          disabled={loading || isDeleting}
-          className={`border border-black px-3 py-2 rounded-md shadow-sm ${loading || isDeleting ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-        >
-          {Object.entries(queryMap).map(([key]) => (
-            <option key={key} value={key}>
-              {key.charAt(0).toUpperCase() + key.slice(1)}
-            </option>
-          ))}
-        </select>
+  <div className="flex flex-col mb-4">
+    <div className="flex items-center gap-3">
+      {metafields.length === 0 ? (
+        <div className="flex items-center gap-3">
+          <select
+            value={objectType}
+            onChange={(e) => setObjectType(e.target.value)}
+            disabled={loading || isDeleting}
+            className={`border border-black px-3 py-2 rounded-md shadow-sm ${loading || isDeleting ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+          >
+            {Object.entries(queryMap).map(([key]) => (
+              <option key={key} value={key}>
+                {key.charAt(0).toUpperCase() + key.slice(1)}
+              </option>
+            ))}
+          </select>
 
+          <button
+            disabled={loading || isDeleting}
+            onClick={fetchMetafields}
+            className={`border text-white bg-black px-3 py-2 rounded-md shadow-sm ${loading || isDeleting ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+          >
+            {loading ? "Fetching..." : "Fetch Metafields"}
+          </button>
+        </div>
+      ) : (
         <button
-          disabled={loading || isDeleting}
-          onClick={fetchMetafields}
-          className={`border text-white bg-black px-3 py-2 rounded-md shadow-sm ${loading || isDeleting ? "opacity-50 cursor-not-allowed" : ""
-            }`}
+          className="px-4 py-2 rounded-md bg-gray-700 text-white hover:bg-gray-800"
+          onClick={resetToHome}
         >
-          {loading ? "Fetching..." : "Fetch Metafields"}
+          Go Back
         </button>
+      )}
+    </div>
+
+    {/* NO RESULTS MESSAGE */}
+    {hasSearched && metafields.length === 0 && !loading && (
+      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md">
+        <strong>No metafields found.</strong> Try selecting a different object type.
       </div>
-    ) : (
-      <button
-        className="px-4 py-2 rounded-md bg-gray-700 text-white hover:bg-gray-800"
-        onClick={resetToHome}
-      >
-        Go Back
-      </button>
     )}
   </div>
 );

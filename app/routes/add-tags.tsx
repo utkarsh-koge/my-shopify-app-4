@@ -522,31 +522,37 @@ export default function SimpleTagManager() {
 
   useEffect(() => {
     if (!isRunning && progress === 100) {
-      console.log(results, "........specificField");
+      // Take only successful results
+      const successResults = results.filter((r) => r.success === true);
 
-      // Build rows array once
-      const rows = results.map((r) => ({
+      const rows = successResults.map((r) => ({
         id: r.id ?? "",
         tagList: Array.isArray(tags) ? tags.join(", ") : "",
-        success: r.success ? "true" : "false",
-        error: r.success
-          ? ""
-          : (r.errors?.map((e) => e.message).join("; ") ?? "")
+        success: "true",
+        error: ""
       }));
+
+      if (!rows.length) return; // nothing to send
 
       const Data = {
         operation: "Tags-Added",
         objectType,
-        value: rows as { id: string; tagList: string; success: string; error: string }[]
+        value: rows as {
+          id: string;
+          tagList: string;
+          success: string;
+          error: string;
+        }[],
       };
 
       fetcher.submit(Data, {
         method: "POST",
         action: "/api/add/db",
-        encType: "application/json"
+        encType: "application/json",
       });
     }
   }, [results, progress]);
+
   return (
     <AppProvider embedded apiKey={apiKey}>
       <div className="max-w-4xl mx-auto p-6 font-sans text-gray-900 border rounded-2xl mt-20">

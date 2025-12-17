@@ -142,6 +142,7 @@ export default function SingleMetafieldViewer() {
   const [specificField, setSpecificField] = useState("Id"); // default selected
   const [resourceCount, setResourceCount] = useState(0);
   const [csvData, setCsvData] = useState(0);
+  const [hasSearched, setHasSearched] = useState(false);
   // Prevent reload/close while running
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -257,6 +258,7 @@ export default function SingleMetafieldViewer() {
     formData.append("objectType", objectType);
     fetcher.submit(formData, { method: "post" });
     setCsvData(0);
+    setHasSearched(false);
   };
 
   const handleMetafieldSelection = (m) => {
@@ -508,6 +510,7 @@ export default function SingleMetafieldViewer() {
     // --------------------------------------------
     if (data?.success && data?.payload?.metafields) {
       setMetafields(data.payload.metafields);
+      setHasSearched(true);
       return;
     }
 
@@ -740,6 +743,7 @@ export default function SingleMetafieldViewer() {
     } else if (removeMode === "update") {
       setSpecificField("Id");
     }
+    setHasSearched(false);
   }, [objectType, removeMode]);
 
   const handleDownloadTemplate = () => {
@@ -938,6 +942,7 @@ export default function SingleMetafieldViewer() {
               resetToHome={resetToHome}
               loading={loading}
               isDeleting={isDeleting}
+              hasSearched={hasSearched}
             />
             <MetafieldListUI
               metafields={metafields}

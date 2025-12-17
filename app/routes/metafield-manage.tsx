@@ -511,9 +511,12 @@ export default function SingleMetafieldViewer() {
     // --------------------------------------------
     if (data?.success && data?.payload?.metafields) {
       setMetafields(data.payload.metafields);
-      setHasSearched(true);
       return;
+    } else {
+      console.log("No metafields found or fetch failed.");
+      setMetafields([]);
     }
+    setHasSearched(true);
 
     // Now we are processing delete/update operations
     const isSuccess = data.success ?? false;

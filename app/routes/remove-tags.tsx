@@ -207,8 +207,12 @@ export default function TagManager() {
         fetcher.submit(fd, { method: "POST" });
       } else {
         // 3. FETCH COMPLETE → APPLY FILTER ONCE
-        setRemovalMode("global");
-        setIsFetchingTags(false);
+        if (allFetchedTags.length === 0) {
+          setNoTagsFound(true);
+        } else {
+          setRemovalMode("global");
+          setIsFetchingTags(false);
+        }
       }
     }
 
@@ -1041,3 +1045,4 @@ export default function TagManager() {
     </AppProvider>
   );
 }
+

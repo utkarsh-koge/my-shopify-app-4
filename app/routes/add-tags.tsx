@@ -88,9 +88,7 @@ export const action = async ({ request }) => {
         });
 
         const parsed = await res.json();
-
         const errors = parsed?.data?.tagsAdd?.userErrors || [];
-
         results.push({
           id: row.id,
           success: errors.length === 0,
@@ -116,23 +114,21 @@ export const action = async ({ request }) => {
   }
 };
 
+interface Result {
+  id?: string;
+  success?: boolean;
+  errors?: { message: string }[];
+  index?: number;
+}
+
 export default function SimpleTagManager() {
   const fetcher = useFetcher();
   const { apiKey } = useLoaderData<typeof loader>();
-
-  interface Result {
-    id?: string;
-    success?: boolean;
-    errors?: { message: string }[];
-    index?: number;
-  }
 
   const [objectType, setObjectType] = useState("product");
   const [csvData, setCsvData] = useState<{ id: string }[]>([]);
   const [results, setResults] = useState<Result[]>([]);
   const [progress, setProgress] = useState(0);
-
-  // Manual Tag Input State
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [tagError, setTagError] = useState<string | null>(null);
@@ -140,7 +136,6 @@ export default function SimpleTagManager() {
   const [specificField, setSpecificField] = useState("Id"); // default selected
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const [flag, setflag] = useState(false); // default selected
 
   console.log(specificField, "........specificField");
   // Modal state
@@ -169,7 +164,7 @@ export default function SimpleTagManager() {
       setCurrentIndex(nextIndex);
       sendRow(nextIndex);
     } else {
-      setIsRunning(false); // ✅ Finished
+      setIsRunning(false);
     }
   }, [fetcher.data]);
 
@@ -238,7 +233,6 @@ export default function SimpleTagManager() {
       },
     });
   };
-
 
   useEffect(() => {
     setCsvData([]);
@@ -315,9 +309,7 @@ export default function SimpleTagManager() {
     if (fileInput) fileInput.value = "";
   };
 
-  // -----------------------------------------------------
   // 1. Open modal instead of directly running handleSubmit
-  // -----------------------------------------------------
   const openConfirmModal = () => {
     // if (!csvData.length || !tags.length) return;
     // CSV required for BOTH: specific delete AND update
@@ -332,9 +324,7 @@ export default function SimpleTagManager() {
     });
   };
 
-  // -----------------------------------------------------
   // 2. Handle Confirm -> runs the original handleSubmit logic
-  // -----------------------------------------------------
   const handleConfirm = () => {
     setModalState((prev) => ({ ...prev, isOpen: false }));
 
@@ -371,9 +361,6 @@ export default function SimpleTagManager() {
   const downloadResults = () => {
     if (!results.length) return;
 
-    // ✅ Determine correct identifier header
-    const identifierHeader = specificField === "Id" ? "Id" : csvType;
-    console.log(specificField, ".....identifierHeader");
     // CSV Header
     const header = [specificField, "Tags", "Success", "Error"].join(",") + "\n";
 
@@ -442,15 +429,12 @@ export default function SimpleTagManager() {
   }, [objectType]);
 
   const handleDownloadTemplate = () => {
-    // Freeze values at the moment of click
     const currentField = specificField;
     const currentType = csvType;
     const currentObjectType = objectType;
 
-    // Determine header
     const header = currentField === "Id" ? "Id" : currentType;
     console.log(header, ".....console.");
-    // Build sample values
     let sampleValues = [];
 
     if (header === "Id") {
@@ -494,14 +478,9 @@ export default function SimpleTagManager() {
       ];
     }
 
-    // Build CSV
     const csvContent = [header, ...sampleValues].join("\n");
-
-    // Create Blob
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-
-    // Create download link
     const link = document.createElement("a");
     link.href = url;
 
@@ -510,13 +489,9 @@ export default function SimpleTagManager() {
     const d = new Date();
     const timeOnly = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 
-    // Use time-only as suffix
     link.download = `sample-${header}-template-${timeOnly}.csv`;
 
-    // Trigger download
     link.click();
-
-    // Cleanup
     URL.revokeObjectURL(url);
   };
 
@@ -532,7 +507,7 @@ export default function SimpleTagManager() {
         error: ""
       }));
 
-      if (!rows.length) return; // nothing to send
+      if (!rows.length) return;
 
       const Data = {
         operation: "Tags-Added",
@@ -723,9 +698,7 @@ export default function SimpleTagManager() {
           </div>
         )}
 
-        {/* Action Buttons */}
         <div className="flex gap-4">
-          {/* Submit -> Opens Modal */}
           {!isFinished && (
             <div className="flex items-center gap-2">
               {/* Submit button */}
@@ -802,9 +775,6 @@ export default function SimpleTagManager() {
           </div>
         )}
 
-        {/* ------------------------------------------- */}
-        {/* CONFIRMATION MODAL (existing component used) */}
-        {/* ------------------------------------------- */}
         <ConfirmationModal
           modalState={modalState}
           onConfirm={handleConfirm}

@@ -3,12 +3,10 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
-    // Authenticate and get shop info
     const { session } = await authenticate.admin(request);
 
-    const shopDomain = session.shop; // e.g. "abc.myshopify.com"
+    const shopDomain = session.shop; 
 
-    // Fetch only logs for this shop
     const logs = await prisma.database.findMany({
       where: {
         myshopifyDomain: shopDomain,

@@ -13,7 +13,6 @@ export const queryMap = {
   market: "markets",
 };
 
-/* ------------------ UTILITIES ------------------ */
 export function fail(message, error = null) {
   return { ok: false, message, error };
 }
@@ -23,7 +22,6 @@ export function success(data) {
 }
 
 export async function fetchResourceCount(admin, resource) {
-  // Map your object types to Shopify count queries
   const countQueryMap = {
     products: "productsCount",
     productVariants: "productVariantsCount",
@@ -73,10 +71,7 @@ export async function fetchResourceCount(admin, resource) {
 
 /* ------------------ FETCH ONE PAGE OF RESOURCE ITEMS ------------------ */
 export async function fetchAllItemIds(admin, resource, cursor = null) {
-  // console.log("---------------------------------------------------");
-  // console.log(`📥 FETCHING PAGE for resource: ${resource}`);
-  // console.log(`➡️ Using cursor:`, cursor || "NULL (first page)");
-  // console.log("---------------------------------------------------");
+
   const count = await fetchResourceCount(admin, resource);
 
   const query = `
@@ -109,16 +104,6 @@ export async function fetchAllItemIds(admin, resource, cursor = null) {
   const items = edges.map((e) => e.node);
   const hasMore = data.pageInfo.hasNextPage;
   const nextCursor = hasMore ? edges.at(-1).cursor : null;
-
-  // // ⭐ SUPER CLEAN LOGGING
-  // console.log(`📄 PAGE RESULTS`);
-  // console.log(`- items returned: ${items.length}`);
-  // console.log(`- first ID: ${items[0]?.id || "none"}`);
-  // console.log(`- last ID : ${items[items.length - 1]?.id || "none"}`);
-  // console.log(`- nextCursor:`, nextCursor || "NONE");
-  // console.log(`- hasMore:`, hasMore);
-  // console.log("---------------------------------------------------");
-
   return {
     items,
     nextCursor,
@@ -135,21 +120,17 @@ export async function removeAllMetafields(
   key,
   cursor = null,
 ) {
-  // 1. Fetch ONLY 1 page (200 items max)
   const page = await fetchAllItemIds(admin, resource, cursor);
   console.log(`➡️ Using count:`, page?.count?.count);
 
-  // Convert node IDs into metafield delete inputs
   const metafields = page.items.map((item) => ({
     ownerId: item.id,
     namespace,
     key,
   }));
 
-  // 2. Delete ONLY this batch
   const batchResults = await deleteMetafields(admin, metafields);
 
-  // 3. Return batch results + pagination info
   return {
     results: batchResults, // delete results for this batch (200 max)
     nextCursor: page.nextCursor, // cursor or null
@@ -533,16 +514,15 @@ export async function updateSpecificMetafield(
   flag,
   objectType,
 ) {
-  // // Normalize flag ALWAYS
+  // Normalize flag ALWAYS
   flag = String(flag).toLowerCase() === "true";
-  console.log("Normalized flag:", flag);
 
   let identifier = id;
 
   if (!flag) {
     const res = await fetchResourceId(admin, objectType, id);
-
     if (!res) {
+      console.error("ID RESOLUTION FAILED");
       return {
         id,
         success: false,
@@ -555,15 +535,81 @@ export async function updateSpecificMetafield(
     identifier = res;
   }
 
-  // Shopify creates OR updates automatically
+  console.log("RAW VALUE:", value);
+  console.log("METAFIELD TYPE:", type);
+
+  let normalizedValue;
+
+  if (type.startsWith("list.")) {
+    let parsedList;
+
+    // Case 1: value already an array
+    if (Array.isArray(value)) {
+      parsedList = value;
+    }
+
+    // Case 2: JSON string
+    else if (typeof value === "string" && value.trim().startsWith("[")) {
+      try {
+        parsedList = JSON.parse(value);
+      } catch (err) {
+        console.error("LIST JSON PARSE FAILED:", value);
+        return {
+          id,
+          key,
+          value,
+          success: false,
+          errors: `Invalid JSON for list metafield (${type})`,
+        };
+      }
+    }
+
+    // Case 3: CSV string ("a, b , c")
+    else if (typeof value === "string") {
+      parsedList = value
+        .split(",")
+        .map(v => v.replace(/\s+/g, "").trim()) // 🔑 removes ALL spaces
+        .filter(Boolean);
+    }
+
+    if (!Array.isArray(parsedList)) {
+      console.error("LIST VALUE NOT ARRAY AFTER PARSE:", parsedList);
+      return {
+        id,
+        key,
+        value,
+        success: false,
+        errors: `Expected list-compatible value for (${type})`,
+      };
+    }
+
+    normalizedValue = JSON.stringify(parsedList);
+  } else {
+    console.log("Detected SINGLE metafield");
+
+    if (value === null || value === undefined) {
+      normalizedValue = "";
+    } else {
+      normalizedValue = String(value);
+    }
+  }
+
+
+  // --------------------------------------------------
+  // METAFIELD INPUT
+  // --------------------------------------------------
   const metafieldInput = {
     ownerId: identifier,
     namespace,
     key,
     type,
-    value,
+    value: normalizedValue,
   };
-  console.log("➡️ Metafield input:", metafieldInput, flag);
+
+
+  // --------------------------------------------------
+  // GRAPHQL MUTATION
+  // --------------------------------------------------
   const mutation = `
     mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
@@ -573,24 +619,36 @@ export async function updateSpecificMetafield(
     }
   `;
 
+
   const updateRes = await admin.graphql(mutation, {
     variables: { metafields: [metafieldInput] },
   });
 
   const json = await updateRes.json();
-  // console.log("📥 RESPONSE:", JSON.stringify(json, null, 2));
 
+
+  // --------------------------------------------------
+  // RESPONSE HANDLING
+  // --------------------------------------------------
   const userErrors = json?.data?.metafieldsSet?.userErrors || [];
   const success = userErrors.length === 0;
 
-  // Convert error format into a clean string
+  if (!success) {
+    console.error("SHOPIFY USER ERRORS:", userErrors);
+  } else {
+    console.log("METAFIELD UPDATE SUCCESS");
+  }
+
   const errorMessage =
-    userErrors.length > 0 ? userErrors.map((e) => e.message).join(", ") : null;
+    userErrors.length > 0
+      ? userErrors.map(e => e.message).join(", ")
+      : null;
+
 
   return {
     id,
     key,
-    value,
+    value: normalizedValue,
     success,
     errors: errorMessage,
   };

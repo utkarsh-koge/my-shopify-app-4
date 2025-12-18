@@ -23,33 +23,31 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100 p-10 flex flex-col items-center relative"> {/* Added relative for button positioning */}
+    <div className="min-h-screen bg-gray-100 p-10 flex flex-col items-center relative">
 
-      {/* FAQ and HISTORY Buttons in Top Right Corner */}
       <div className="absolute top-10 right-10 flex space-x-4">
         <button
           className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors shadow-sm flex items-center gap-2"
-          onClick={() => navigate("/faq")} // Assuming an /faq route
+          onClick={() => navigate("/faq")}
         >
           <HelpCircle size={18} />
           FAQ
         </button>
         <button
           className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors shadow-sm flex items-center gap-2"
-          onClick={() => navigate("/history")} // Assuming a /history route
+          onClick={() => navigate("/history")}
         >
           <History size={18} />
           History
         </button>
       </div>
 
-      <h1 className="text-4xl font-bold text-black mb-3 mt-10">Tag-Field Manager 🏷️</h1> {/* Adjusted margin-top for better spacing below buttons */}
+      <h1 className="text-4xl font-bold text-black mb-3 mt-10">Tag-Field Manager 🏷️</h1>
       <p className="text-gray-700 max-w-xl text-center mb-10">
         Manage your Shopify store tags and metafields easily. Upload CSV to add/remove tags,
         and clear or update metafield values in bulk from different resources.
       </p>
 
-      {/* Modules Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl mb-10">
         {modules.map((module) => (
           <div

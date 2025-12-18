@@ -50,7 +50,8 @@ export const MetafieldFetcherUI = ({
     {/* NO RESULTS MESSAGE */}
     {hasSearched && metafields.length === 0 && !loading && (
       <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md">
-        <strong>No metafields found.</strong> Try selecting a different object type.
+        <strong>No metafields found.</strong> Try selecting a different object
+        type.
       </div>
     )}
   </div>
@@ -105,7 +106,7 @@ export const MetafieldRemoverUI = ({
   loading,
   isDeleting,
   progress,
-  resetToHome,
+  backToSelectedFeild,
   specificField,
   setSpecificField,
   csvType,
@@ -182,7 +183,7 @@ export const MetafieldRemoverUI = ({
                 Download CSV Format
               </button>
             </div>
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs text-gray-500 mb-1">
               (Max 5000 records allowed)
             </p>
             <input
@@ -253,9 +254,10 @@ export const MetafieldRemoverUI = ({
                 Download CSV Format
               </button>
             </div>
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs text-gray-500 mb-1">
               (Max 5000 records allowed)
             </p>
+
             <input
               type="file"
               accept=".csv"
@@ -263,6 +265,10 @@ export const MetafieldRemoverUI = ({
               className="border border-gray-300 p-2 rounded-md"
               disabled={isDeleting}
             />
+            <p className="text-xs text-blue-500 mt-1">
+              (In the CSV file, use commas to separate multiple values for list-type metafields)
+            </p>
+
             {csvData > 0 && (
               <p className="text-sm text-green-600 mt-1">
                 {csvData}{" "}
@@ -303,7 +309,7 @@ export const MetafieldRemoverUI = ({
     {!isDeleting && progress <= 0 && (
       <button
         className="px-4 py-2 ml-2 rounded-md bg-gray-700 text-white hover:bg-gray-800"
-        onClick={resetToHome}
+        onClick={backToSelectedFeild}
       >
         Go Back
       </button>

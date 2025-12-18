@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useFetcher, useNavigate, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import ConfirmationModal from "../componant/confirmationmodal";
 import {
@@ -8,13 +8,13 @@ import {
   removeAllMetafields,
   removeSpecificMetafield,
   updateSpecificMetafield,
-} from "app/functions/metafield-clear-action";
+} from "app/functions/metafield-manage-action";
 import {
   MetafieldFetcherUI,
   MetafieldListUI,
   MetafieldRemoverUI,
   CompletionResultsUI,
-} from "app/componant/metafield-clear-form";
+} from "app/componant/metafield-manage-form";
 import Navbar from "app/componant/app-nav";
 import type { LoaderFunctionArgs } from "react-router";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -23,7 +23,6 @@ import Papa from "papaparse";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     await authenticate.admin(request);
-    // eslint-disable-next-line no-undef
     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
   } catch (error) {
     console.error("Loader error:", error);
@@ -45,12 +44,9 @@ export async function action({ request }) {
     const type = formData.get("type");
     const id = formData.get("id");
     const flag = formData.get("flag");
-    console.log(flag, "...........flag");
     const resource = queryMap[objectType];
-    console.log(resource, "...........resource");
-    // -----------------------------------------------------
+
     // REMOVE ALL METAFIELDS (PAGINATED)
-    // -----------------------------------------------------
     if (mode === "removeMetafield") {
       const cursor = formData.get("cursor") || null;
 
@@ -65,9 +61,7 @@ export async function action({ request }) {
       return { success: true, payload };
     }
 
-    // -----------------------------------------------------
     // REMOVE SPECIFIC METAFIELD (ONE ID)
-    // -----------------------------------------------------
     if (mode === "removeMetafieldSpecific") {
       if (!id) {
         return { success: false, message: "No ID provided" };
@@ -85,9 +79,7 @@ export async function action({ request }) {
       return { success: payload.success, payload };
     }
 
-    // -----------------------------------------------------
     // UPDATE SPECIFIC METAFIELD (ONE ID)
-    // -----------------------------------------------------
     if (mode === "updateMetafieldSpecific") {
       if (!id) {
         return { success: false, message: "No ID provided" };
@@ -107,9 +99,7 @@ export async function action({ request }) {
       return { success: payload.success, payload };
     }
 
-    // -----------------------------------------------------
     // DEFAULT ACTION — FETCH DEFINITIONS
-    // -----------------------------------------------------
     const payload = await fetchDefinitions(admin, resource);
     return { success: true, payload };
   } catch (err) {
@@ -143,10 +133,11 @@ export default function SingleMetafieldViewer() {
   const [resourceCount, setResourceCount] = useState(0);
   const [csvData, setCsvData] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
+
   // Prevent reload/close while running
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDeleting) {
+      if (isDeleting && !completed) {
         e.preventDefault();
         e.returnValue = ""; // Chrome requires returnValue to be set
       }
@@ -158,7 +149,7 @@ export default function SingleMetafieldViewer() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [isDeleting]);
-  console.log(csvData, "........resourceCount");
+
   // --- Core Utility Functions ---
   function downloadResultsCSV(results, removeMode) {
     if (!results || results.length === 0) {
@@ -183,25 +174,31 @@ export default function SingleMetafieldViewer() {
       filename = "removeAll_results";
     }
 
-    // -------------------------------
     // DELETE (specific)
-    // -------------------------------
     if (removeMode === "specific") {
       headers = [specificField.toLowerCase(), "success", "value", "error"];
+
+      function normalizeValue(v) {
+        if (typeof v !== "string") return v ?? "";
+        const parsed = JSON.parse(v);
+        if (Array.isArray(parsed)) {
+          return parsed.join(",");
+        }
+        return v;
+      }
 
       rows = results.map((r) => [
         r.id || "",
         r.success ? "true" : "false",
-        r.data?.value,
+        normalizeValue(r.data?.value),
         r.errors || "",
       ]);
 
       filename = "remove_results";
     }
 
-    // -------------------------------
+
     // UPDATE
-    // -------------------------------
     else if (removeMode === "update") {
       headers = [
         specificField.toLowerCase(),
@@ -222,9 +219,7 @@ export default function SingleMetafieldViewer() {
       filename = "update_results";
     }
 
-    // -------------------------------
     // Build CSV
-    // -------------------------------
     const csvArray = [headers, ...rows]
       .map((row) => row.map((value) => `"${value}"`).join(","))
       .join("\n");
@@ -251,7 +246,6 @@ export default function SingleMetafieldViewer() {
   }
 
   // --- Handler Functions ---
-
   const fetchMetafields = () => {
     if (!objectType) return;
     const formData = new FormData();
@@ -263,7 +257,6 @@ export default function SingleMetafieldViewer() {
 
   const handleMetafieldSelection = (m) => {
     setSelectedMetafield(m);
-    // Reset state for next operation
     setCsvRows([]);
     setRemoveMode("all");
     setProgress(0);
@@ -276,9 +269,7 @@ export default function SingleMetafieldViewer() {
   const handleCSVUpload = (e) => {
     const file = e.target.files?.[0];
 
-    // -----------------------------
     // 1. Basic validation
-    // -----------------------------
     if (!file) {
       setCsvRows([]);
       setCsvData(0);
@@ -293,9 +284,6 @@ export default function SingleMetafieldViewer() {
       return;
     }
 
-    // -----------------------------
-    // 2. Parse CSV (PRODUCTION)
-    // -----------------------------
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -305,7 +293,6 @@ export default function SingleMetafieldViewer() {
 
         const rows = res.data
           .map((row) => {
-            // Convert CSV headers to lowercase
             const normalizedRow = Object.keys(row).reduce((acc, key) => {
               acc[key.toLowerCase()] = row[key];
               return acc;
@@ -419,8 +406,13 @@ export default function SingleMetafieldViewer() {
       const cols = parseCSVLine(line);
 
       const idRaw = cols[idIndex];
-      const valueRaw = cols[valueIndex];
+      const normalizeNoSpace = (v) =>
+        v
+          ?.trim()
+          .replace(/\s+/g, "");
 
+      const valueRaw = normalizeNoSpace(cols[valueIndex]);
+      console.log(valueRaw, '.........values')
       return {
         id: idRaw,
         namespace: selectedMetafield.namespace,
@@ -498,25 +490,34 @@ export default function SingleMetafieldViewer() {
     setAccumulatedResults([]);
     setResourceCount(0);
     setHasSearched(false);
+<<<<<<< HEAD
     // navigate(0)
+=======
+  };
+  const backToSelectedFeild = () => {
+    setSelectedMetafield(null);
+    setCsvRows([]);
+    setRemoveMode("all");
+    setProgress(0);
+    setResults([]);
+    setCompleted(false);
+    setCurrentIndex(0);
+    setAccumulatedResults([]);
+    setResourceCount(0);
+    setHasSearched(false);
+>>>>>>> f4fcd8c (new updated changes)
   };
 
-  console.log(results, ".......progress");
   useEffect(() => {
-    // Only run when the request finishes
     if (fetcher.state !== "idle" || !fetcher.data) return;
 
     const data = fetcher.data;
-    // --------------------------------------------
-    // 1. Handle metafield fetch (initial load)
-    // --------------------------------------------
     if (data?.success && data?.payload?.metafields) {
       setMetafields(data.payload.metafields);
     }
     setHasSearched(true);
 
 
-    // Now we are processing delete/update operations
     const isSuccess = data.success ?? false;
     const response = data?.payload;
 
@@ -526,12 +527,9 @@ export default function SingleMetafieldViewer() {
       data?.error ||
       "";
 
-    // ============================================================
-    // 2. REMOVE MODE: SPECIFIC (CSV sequential)
-    // ============================================================
     if (removeMode === "specific" && isDeleting) {
       const row = response;
-
+      console.log(response, 'response')
       let updaterow = { ...row, id: csvRows[currentIndex]?.id };
 
       const newResult = { ...updaterow, success: isSuccess, error: errorMsg };
@@ -542,7 +540,6 @@ export default function SingleMetafieldViewer() {
       setProgress(Math.round(((currentIndex + 1) / csvRows.length) * 100));
 
       if (currentIndex + 1 >= csvRows.length) {
-        // Finished
         setIsDeleting(false);
         setCompleted(true);
         setSelectedMetafield(null);
@@ -552,12 +549,8 @@ export default function SingleMetafieldViewer() {
 
     }
 
-    // ============================================================
-    // 3. UPDATE MODE: (CSV sequential)
-    // ============================================================
     if (removeMode === "update" && isDeleting) {
       const row = csvRows[currentIndex];
-      // setcurrentrow(row);
       let updaterow = { ...row, id: csvRows[currentIndex]?.id };
       console.log(updaterow, "........updaterow", currentIndex);
       const newResult = {
@@ -577,7 +570,6 @@ export default function SingleMetafieldViewer() {
       setProgress(Math.round(((currentIndex + 1) / csvRows.length) * 100));
 
       if (currentIndex + 1 >= csvRows.length) {
-        // Finished
         setIsDeleting(false);
         setCompleted(true);
         setSelectedMetafield(null);
@@ -587,39 +579,32 @@ export default function SingleMetafieldViewer() {
 
     }
 
-    // ============================================================
-    // 4. REMOVE ALL MODE (PAGINATED DELETE + REAL PROGRESS BAR)
-    // ============================================================
     if (removeMode === "all" && isDeleting) {
       const payload = data.payload;
       const batch = payload?.results ?? [];
       const nextCursor = payload?.nextCursor ?? null;
       const hasMore = payload?.hasMore ?? false;
 
-      // 🔥 NEW: TOTAL COUNT provided by the server
       const totalCount = payload?.ResourceCount ?? null;
       if (resourceCount === 0) {
         setResourceCount(totalCount);
       }
+<<<<<<< HEAD
 
       // 1️⃣ Append batch results to accumulated results
+=======
+>>>>>>> f4fcd8c (new updated changes)
       const updatedResults = [...accumulatedResults, ...batch];
       setAccumulatedResults(updatedResults);
       setResults(updatedResults);
-      console.log(payload, "........batch");
 
-      // 2️⃣ REAL progress bar calculation
       if (totalCount && totalCount > 0) {
         const percent = Math.round((updatedResults.length / totalCount) * 100);
         setProgress(percent);
       } else {
-        // fallback progress
         setProgress(10);
       }
-
-      // 3️⃣ If more batches remain → fetch next batch
       if (hasMore && nextCursor) {
-        console.log("➡️ Fetching next batch...");
         const formData = new FormData();
         formData.append("mode", "removeMetafield");
         formData.append("objectType", objectType);
@@ -629,9 +614,6 @@ export default function SingleMetafieldViewer() {
 
         fetcher.submit(formData, { method: "post" });
       }
-
-      // 4️⃣ If no more pages → finish delete process
-      console.log("✅ ALL BATCHES DELETED");
       setProgress(100);
       setCompleted(true);
       setIsDeleting(false);
@@ -642,7 +624,6 @@ export default function SingleMetafieldViewer() {
   useEffect(() => {
     if (!isDeleting) return;
 
-    // remove-all does NOT use sequential loop
     if (removeMode === "all") return;
 
     if (currentIndex >= csvRows.length) {
@@ -680,7 +661,6 @@ export default function SingleMetafieldViewer() {
       (removeMode === "all" || removeMode === "specific")
     ) {
       const TrueResult = results.filter((r) => r?.success);
-      console.log("we arehereeeeeeeeeeeee", TrueResult);
       const Data = {
         operation: "Metafield-removed",
         objectType,
@@ -739,15 +719,12 @@ export default function SingleMetafieldViewer() {
   }, [objectType, removeMode]);
 
   const handleDownloadTemplate = () => {
-    // Freeze values at the moment of click
     const currentField = specificField;
     const currentType = csvType;
     const currentObjectType = objectType;
 
-    // Determine CSV header
     const header = currentField === "Id" ? "Id" : currentType;
 
-    // Map object types to Shopify GID resource names
     const gidMap = {
       product: "Product",
       customer: "Customer",
@@ -763,7 +740,6 @@ export default function SingleMetafieldViewer() {
 
     const gidType = gidMap[currentObjectType] || "Unknown";
 
-    // Build sample values based on header
     let sampleValues = [];
 
     if (header === "Id") {
@@ -785,10 +761,8 @@ export default function SingleMetafieldViewer() {
         "example5@mail.com",
       ];
     } else if (header === "Name") {
-      // ORDER NAME
       sampleValues = ["#1001", "#1002", "#1003", "#1004", "#1005"];
     } else if (header === "Handle") {
-      // For product, blog, blogPost, page
       sampleValues = [
         "sample-handle-1",
         "sample-handle-2",
@@ -797,7 +771,6 @@ export default function SingleMetafieldViewer() {
         "sample-handle-5",
       ];
     } else if (header === "External_ID") {
-      // For company and companyLocation
       sampleValues = [
         "External_ID-1",
         "External_ID-2",
@@ -808,31 +781,25 @@ export default function SingleMetafieldViewer() {
     }
 
     if (removeMode === "specific") {
-      // Build CSV content
       const csvContent = [header, ...sampleValues].join("\n");
 
-      // Create Blob
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
 
-      // Create download link
       const link = document.createElement("a");
       link.href = url;
 
-      // Time-only suffix (HH-MM-SS)
       const pad = (n) => n.toString().padStart(2, "0");
       const d = new Date();
       const timeOnly = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 
       link.download = `sample-${header}-template-${timeOnly}.csv`;
 
-      // Trigger download
       link.click();
       URL.revokeObjectURL(url);
     }
 
     if (removeMode === "update") {
-      // Build right-column sample values (value-1 → value-5)
       const rightColumnSamples = [
         "value-1",
         "value-2",
@@ -841,23 +808,19 @@ export default function SingleMetafieldViewer() {
         "value-5",
       ];
 
-      // Combine into CSV rows
       const rows = [
-        `${header},Value`, // headers
+        `${header},Value`,
         ...sampleValues.map((val, i) => `${val},${rightColumnSamples[i]}`),
       ];
 
       const csvContent = rows.join("\n");
 
-      // Create Blob
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
 
-      // Create download link
       const link = document.createElement("a");
       link.href = url;
 
-      // Time-only suffix (HH-MM-SS)
       const pad = (n) => n.toString().padStart(2, "0");
       const d = new Date();
       const timeOnly = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
@@ -918,7 +881,6 @@ export default function SingleMetafieldViewer() {
       <div className="max-w-4xl mx-auto p-6 font-sans text-gray-900 border rounded-2xl mt-20">
         <Navbar />
         <div className="mb-8 border-b border-gray-200 pb-4 flex justify-between items-center">
-          {/* Left Side: Title and Description */}
           <div className="text-left">
             <h1 className="text-2xl font-bold mb-4">Metafield Viewer</h1>
           </div>
@@ -932,6 +894,7 @@ export default function SingleMetafieldViewer() {
               fetchMetafields={fetchMetafields}
               metafields={metafields}
               resetToHome={resetToHome}
+
               loading={loading}
               isDeleting={isDeleting}
               hasSearched={hasSearched}
@@ -957,6 +920,7 @@ export default function SingleMetafieldViewer() {
             progress={progress}
             resetToHome={resetToHome}
             setSpecificField={setSpecificField}
+            backToSelectedFeild={backToSelectedFeild}
             specificField={specificField}
             csvType={csvType}
             handleDownloadTemplate={handleDownloadTemplate}

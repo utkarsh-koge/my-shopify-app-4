@@ -3,12 +3,10 @@ import { authenticate } from "../shopify.server";
 
 export async function action({ request }) {
   try {
-    // Authenticate Shopify Admin
     const { admin } = await authenticate.admin(request);
 
     console.log("API Add DB Action Triggered");
 
-    // --- Fetch shop details (store email) ---
     const shopQuery = `
   query {
     shop { 
@@ -28,7 +26,6 @@ export async function action({ request }) {
     const userName = shopJson?.data?.shop?.email || "unknown@shop.com";
     const myshopifyDomain = shopJson?.data?.shop?.myshopifyDomain || "unknown.myshopify.com";
     console.log("myshopifyDomain:", myshopifyDomain);
-    // --- Parse body safely ---
     const raw = await request.text();
     let body = {};
     try {
@@ -70,12 +67,11 @@ export async function action({ request }) {
     // --- Insert into DB ---
     const savedRow = await prisma.database.create({
       data: {
-        userName, // shop email
-        operation, // e.g., "Tags-removed"
-        value, // JSON array with objects
+        userName,
+        operation,
+        value, 
         objectType,
         myshopifyDomain
-        // time auto-filled by Prisma
       },
     });
 

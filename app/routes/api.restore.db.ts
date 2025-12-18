@@ -1,10 +1,7 @@
 import { authenticate } from "../shopify.server";
-import { fetchResourceId as fetchMetaResourceID } from "app/functions/metafield-clear-action";
+import { fetchResourceId as fetchMetaResourceID } from "app/functions/metafield-manage-action";
 import { fetchResourceId as fetchTagResourceID } from "app/functions/remove-tag-action";
 
-// ======================================================
-// MAIN ACTION: HANDLES TAGS + METAFIELDS
-// ======================================================
 export async function action({ request }) {
   try {
     const { admin } = await authenticate.admin(request);
@@ -24,16 +21,12 @@ export async function action({ request }) {
     const objectType = row.objectType;
     let resolvedId = row.id;
     console.log(objectType, '........object')
-    // ======================================================
-    // STEP 1: RESOLVE ID IF NOT SHOPIFY GID
-    // ======================================================
     const isShopifyGID =
       typeof resolvedId === "string" &&
       resolvedId.startsWith("gid://shopify/");
 
     if (!isShopifyGID) {
       try {
-        // Use correct resolver based on operation
         if (row.tags) {
           resolvedId = await fetchTagResourceID(
             admin,
@@ -62,9 +55,7 @@ export async function action({ request }) {
       }
     }
 
-    // ======================================================
-    // CASE 1: TAG RESTORE (UNDO)
-    // ======================================================
+
     if (row?.tags && row.tags.length > 0) {
       // UNDO "Tags-Added" -> Remove Tags
       if (row.operation === "Tags-Added") {
@@ -111,9 +102,6 @@ export async function action({ request }) {
     }
     console.log(row, 'response')
 
-    // ======================================================
-    // CASE 2: METAFIELD RESTORE (UNDO)
-    // ======================================================
     if (row?.namespace && row?.key) {
       // UNDO "Metafield-updated" -> Delete Metafield (as per user request)
       if (row.operation === "Metafield-updated") {
@@ -161,9 +149,6 @@ export async function action({ request }) {
       return Response.json({ success: true });
     }
 
-    // ======================================================
-    // UNKNOWN RESTORE TYPE
-    // ======================================================
     return Response.json({
       success: false,
       errors: [
@@ -184,9 +169,6 @@ export async function action({ request }) {
   }
 }
 
-// ======================================================
-// METAFIELD RESTORE HELPER
-// ======================================================
 async function updateSpecificMetafield(admin, id, namespace, key, value, type) {
   const metafieldInput = {
     ownerId: id,

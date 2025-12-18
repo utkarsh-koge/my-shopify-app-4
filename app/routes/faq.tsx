@@ -19,7 +19,6 @@ import type { LoaderFunctionArgs } from "react-router";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     await authenticate.admin(request);
-    // eslint-disable-next-line no-undef
     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
@@ -214,7 +213,7 @@ export default function FaqPage() {
                         <div className="flex gap-1">
                             <span className="font-semibold text-blue-800">Time Limit:</span>
                             <span className="text-blue-900">
-                                Logs and restore options expire after <strong>24 hours</strong>.
+                                History logs expire after <strong>24 hours</strong>.
                             </span>
                         </div>
                         <div className="flex gap-1">

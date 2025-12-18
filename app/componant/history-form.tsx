@@ -89,8 +89,8 @@ export function LogsTable({ logs, openRow, setOpenRow, handleRestore, isLoading 
 export function LogRow({ log, index, openRow, setOpenRow, handleRestore }) {
   return (
     <tr className="hover:bg-gray-100 transition-colors border-b border-gray-300">
-      <td className="p-3 text-black break-words">{log.userName}</td>
-      <td className="p-3 text-black break-words">
+      <td className="p-3 text-black wrap-break-word">{log.userName}</td>
+      <td className="p-3 text-black wrap-break-word">
         {log.operation}
         {log.objectType && (
           <span className="block text-xs text-gray-500">({log.objectType})</span>

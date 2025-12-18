@@ -7,7 +7,6 @@ export default function ConfirmationModal({
     isRemoving = false,    // loading state
     confirmText = "Confirm", // button text
     cancelText = "Cancel",   // cancel button text
-    confirmColor = "black",  // background color of confirm button
 }) {
     const { isOpen = false, title = "", message = "" } = modalState;
 

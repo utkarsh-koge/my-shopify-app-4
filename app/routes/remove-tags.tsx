@@ -81,8 +81,6 @@ export default function TagManager() {
   // SPECIFIC MODE RESULTS
   const [finalSpecificResults, setFinalSpecificResults] = useState([]);
   const [csvIndex, setCsvIndex] = useState(1);
-  const [Total, setTotal] = useState(0); // NEW
-
 
   // Prevent reload/close while running
   useEffect(() => {
@@ -99,8 +97,6 @@ export default function TagManager() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [isRemoving]);
-
-
 
   // GLOBAL MODE PAGINATED RESULTS
   const [globalResult, setGlobalResult] = useState({
@@ -313,7 +309,8 @@ export default function TagManager() {
     if (successRows.length === 0) return;
     if (specificEnd) {
       const Data = {
-        operation: "Tags-removed", objectType,
+        operation: "Tags-removed",
+        objectType,
         value: successRows,
       };
 
@@ -412,7 +409,6 @@ export default function TagManager() {
 
   useEffect(() => {
     setCsvIds([]);
-    setTotal(0);
     const fileInput = document.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement;
@@ -428,7 +424,6 @@ export default function TagManager() {
     // -----------------------------
     if (!file) {
       setCsvIds([]);
-      setTotal(0);
       return;
     }
 
@@ -439,7 +434,6 @@ export default function TagManager() {
       alert("Please upload a valid CSV file.");
       e.target.value = null;
       setCsvIds([]);
-      setTotal(0);
       return;
     }
 
@@ -458,7 +452,6 @@ export default function TagManager() {
         if (!Array.isArray(res.data)) {
           alert("Invalid CSV format.");
           setCsvIds([]);
-          setTotal(0);
           return;
         }
 
@@ -478,7 +471,6 @@ export default function TagManager() {
         if (values.length > 5000) {
           alert("You can only upload a maximum of 5000 records at a time.");
           setCsvIds([]);
-          setTotal(0);
           e.target.value = null;
           return;
         }
@@ -487,7 +479,6 @@ export default function TagManager() {
         // 6. Commit state
         // -----------------------------
         setCsvIds(values);
-        setTotal(values.length);
 
         // Allow re-upload of same file
         // e.target.value = null;
@@ -497,7 +488,6 @@ export default function TagManager() {
         console.error("CSV parsing failed:", err);
         alert("Failed to parse CSV file.");
         setCsvIds([]);
-        setTotal(0);
         e.target.value = null;
       },
     });
@@ -717,7 +707,6 @@ export default function TagManager() {
             </select>
           </div>
 
-
           {/* PRODUCT INDEXING ALERT */}
           {objectType === "product" && (
             <div className="mt-2 p-2 text-orange-700 text-sm">
@@ -725,7 +714,8 @@ export default function TagManager() {
               <br />
               1. After adding a tag, it may take 2–5 minutes to appear here.
               <br />
-              2. After removing a tag, it may take 2–5 minutes to disappear here.
+              2. After removing a tag, it may take 2–5 minutes to disappear
+              here.
             </div>
           )}
 
@@ -746,7 +736,9 @@ export default function TagManager() {
                   <div className="flex items-center gap-2">
                     <input
                       disabled={isActionDisabled || fetchedItems.length > 0} // Disable after fetch until cleared
-                      className={`border px-3 py-2 rounded-md text-gray-900 disabled:opacity-50 ${isDuplicate ? "border-red-500 focus:ring-red-500" : "border-gray-300"
+                      className={`border px-3 py-2 rounded-md text-gray-900 disabled:opacity-50 ${isDuplicate
+                        ? "border-red-500 focus:ring-red-500"
+                        : "border-gray-300"
                         }`}
                       // UPDATED PLACEHOLDER
                       placeholder="Enter tag (Min 2 chars)"
@@ -1008,7 +1000,9 @@ export default function TagManager() {
                       key={idx}
                       className={`${r.success ? "text-green-700" : "text-red-700"}`}
                     >
-                      <span className="font-bold mr-2">#{finalSpecificResults.length - idx}</span>
+                      <span className="font-bold mr-2">
+                        #{finalSpecificResults.length - idx}
+                      </span>
                       ID: {r.row} |{" "}
                       {r.success
                         ? "Success"

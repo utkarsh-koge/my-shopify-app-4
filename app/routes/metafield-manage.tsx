@@ -497,6 +497,7 @@ export default function SingleMetafieldViewer() {
     setCurrentIndex(0);
     setAccumulatedResults([]);
     setResourceCount(0);
+    setHasSearched(false);
     // navigate(0)
   };
 
@@ -511,12 +512,9 @@ export default function SingleMetafieldViewer() {
     // --------------------------------------------
     if (data?.success && data?.payload?.metafields) {
       setMetafields(data.payload.metafields);
-      return;
-    } else {
-      console.log("No metafields found or fetch failed.");
-      setMetafields([]);
     }
     setHasSearched(true);
+
 
     // Now we are processing delete/update operations
     const isSuccess = data.success ?? false;
@@ -552,7 +550,6 @@ export default function SingleMetafieldViewer() {
         setCurrentIndex((prev) => prev + 1);
       }
 
-      return;
     }
 
     // ============================================================
@@ -588,7 +585,6 @@ export default function SingleMetafieldViewer() {
         setCurrentIndex((prev) => prev + 1);
       }
 
-      return;
     }
 
     // ============================================================
@@ -604,13 +600,6 @@ export default function SingleMetafieldViewer() {
       const totalCount = payload?.ResourceCount ?? null;
       if (resourceCount === 0) {
         setResourceCount(totalCount);
-      }
-
-      if (!Array.isArray(batch)) {
-        console.error("Invalid remove-all response:", data);
-        setIsDeleting(false);
-        setCompleted(true);
-        return;
       }
 
       // 1️⃣ Append batch results to accumulated results
@@ -639,7 +628,6 @@ export default function SingleMetafieldViewer() {
         formData.append("cursor", nextCursor);
 
         fetcher.submit(formData, { method: "post" });
-        return; // ⏳ WAIT FOR NEXT BATCH
       }
 
       // 4️⃣ If no more pages → finish delete process
@@ -648,7 +636,6 @@ export default function SingleMetafieldViewer() {
       setCompleted(true);
       setIsDeleting(false);
       setSelectedMetafield(null);
-      return;
     }
   }, [fetcher.state, fetcher.data]);
 

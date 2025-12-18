@@ -489,25 +489,10 @@ export default function SingleMetafieldViewer() {
     setCurrentIndex(0);
     setAccumulatedResults([]);
     setResourceCount(0);
-    setHasSearched(false);
-<<<<<<< HEAD
     // navigate(0)
-=======
-  };
-  const backToSelectedFeild = () => {
-    setSelectedMetafield(null);
-    setCsvRows([]);
-    setRemoveMode("all");
-    setProgress(0);
-    setResults([]);
-    setCompleted(false);
-    setCurrentIndex(0);
-    setAccumulatedResults([]);
-    setResourceCount(0);
-    setHasSearched(false);
->>>>>>> f4fcd8c (new updated changes)
   };
 
+  console.log(results, ".......progress");
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data) return;
 
@@ -589,11 +574,15 @@ export default function SingleMetafieldViewer() {
       if (resourceCount === 0) {
         setResourceCount(totalCount);
       }
-<<<<<<< HEAD
+
+      if (!Array.isArray(batch)) {
+        console.error("Invalid remove-all response:", data);
+        setIsDeleting(false);
+        setCompleted(true);
+        return;
+      }
 
       // 1️⃣ Append batch results to accumulated results
-=======
->>>>>>> f4fcd8c (new updated changes)
       const updatedResults = [...accumulatedResults, ...batch];
       setAccumulatedResults(updatedResults);
       setResults(updatedResults);

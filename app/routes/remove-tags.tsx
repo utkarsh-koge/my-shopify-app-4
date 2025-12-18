@@ -81,6 +81,7 @@ export default function TagManager() {
   // SPECIFIC MODE RESULTS
   const [finalSpecificResults, setFinalSpecificResults] = useState([]);
   const [csvIndex, setCsvIndex] = useState(1);
+  const [search, setsearch] = useState(false);
 
   // Prevent reload/close while running
   useEffect(() => {
@@ -166,7 +167,7 @@ export default function TagManager() {
     setFetchedItems([]);
     setNoTagsFound(false);
     setIsFetchingTags(true);
-
+    setsearch(true)
     const fd = new FormData();
     fd.append("mode", "fetch");
     fd.append("objectType", objectType);
@@ -184,7 +185,10 @@ export default function TagManager() {
       );
       setFetchedItems(filtered);
       setNoTagsFound(filtered.length === 0);
+
     }
+    if (search && allFetchedTags.length === 0) { setNoTagsFound(true) }
+    console.log('.............', isFetchingTags)
   }, [isFetchingTags]);
 
   useEffect(() => {
@@ -206,13 +210,10 @@ export default function TagManager() {
 
         fetcher.submit(fd, { method: "POST" });
       } else {
+        console.log(data, '.............')
         // 3. FETCH COMPLETE → APPLY FILTER ONCE
-        if (allFetchedTags.length === 0) {
-          setNoTagsFound(true);
-        } else {
-          setRemovalMode("global");
-          setIsFetchingTags(false);
-        }
+        setRemovalMode("global");
+        setIsFetchingTags(false);
       }
     }
 
@@ -409,6 +410,8 @@ export default function TagManager() {
     setIsRemoving(false);
     setRemovalMode("global");
     setspecificEnd(false);
+    setsearch(false)
+
   };
 
   useEffect(() => {
@@ -793,7 +796,7 @@ export default function TagManager() {
             </button>
 
             {/* NEW: Cancel Button */}
-            {(fetchedItems.length > 0 || noTagsFound) && !isRemoving && (
+            {(fetchedItems.length > 0) && (
               <button
                 className="mt-4 border border-black text-black px-4 py-2 rounded-md hover:bg-gray-100 transition"
                 onClick={handleCancel}
@@ -1045,4 +1048,3 @@ export default function TagManager() {
     </AppProvider>
   );
 }
-

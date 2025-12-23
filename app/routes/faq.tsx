@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useNavigate } from "react-router";
 import { authenticate } from "../shopify.server";
 import Navbar from "app/componant/app-nav";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -19,7 +19,6 @@ import type { LoaderFunctionArgs } from "react-router";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     await authenticate.admin(request);
-    // eslint-disable-next-line no-undef
     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
@@ -36,7 +35,7 @@ const FaqItem = ({ question, answer, icon: Icon, isOpen, onClick }: FaqItemProps
         <div className="border border-gray-200 rounded-lg bg-white overflow-hidden transition-all duration-300 hover:shadow-sm mb-2">
             <button
                 onClick={onClick}
-                className="w-full flex items-center justify-between p-3 text-left bg-white hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center justify-between p-3 text-left bg-white hover:bg-gray-50 transition-colors cursor-pointer"
             >
                 <div className="flex items-center gap-3">
                     {Icon && (
@@ -66,6 +65,7 @@ const FaqItem = ({ question, answer, icon: Icon, isOpen, onClick }: FaqItemProps
 
 export default function FaqPage() {
     const { apiKey } = useLoaderData<typeof loader>();
+    const navigate = useNavigate();
     const [openIndex, setOpenIndex] = useState<number | null>(0);
 
     const toggleFaq = (index: number) => {
@@ -214,7 +214,7 @@ export default function FaqPage() {
                         <div className="flex gap-1">
                             <span className="font-semibold text-blue-800">Time Limit:</span>
                             <span className="text-blue-900">
-                                Logs and restore options expire after <strong>24 hours</strong>.
+                                History logs expire after <strong>24 hours</strong>.
                             </span>
                         </div>
                         <div className="flex gap-1">
@@ -241,8 +241,24 @@ export default function FaqPage() {
 
     return (
         <AppProvider embedded apiKey={apiKey}>
-            <div className="min-h-screen bg-gray-50 pb-10">
+            <div className="min-h-screen bg-gray-50 pb-10 relative">
                 <div className="max-w-3xl mx-auto p-4 font-sans text-gray-900">
+                    {/* <button
+                        onClick={() => navigate("/app")}
+                        className="mb-6 px-4 py-2 bg-white border border-[#dfe3e8] rounded-md hover:bg-gray-50 transition text-[#202223] shadow-sm cursor-pointer text-sm font-medium flex items-center gap-2 w-fit"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Go to home
+                    </button> */}
                     <Navbar />
 
                     <div className="text-center mb-6">

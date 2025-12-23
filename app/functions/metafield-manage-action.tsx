@@ -13,7 +13,6 @@ export const queryMap = {
   market: "markets",
 };
 
-/* ------------------ UTILITIES ------------------ */
 export function fail(message, error = null) {
   return { ok: false, message, error };
 }
@@ -23,7 +22,6 @@ export function success(data) {
 }
 
 export async function fetchResourceCount(admin, resource) {
-  // Map your object types to Shopify count queries
   const countQueryMap = {
     products: "productsCount",
     productVariants: "productVariantsCount",
@@ -73,10 +71,7 @@ export async function fetchResourceCount(admin, resource) {
 
 /* ------------------ FETCH ONE PAGE OF RESOURCE ITEMS ------------------ */
 export async function fetchAllItemIds(admin, resource, cursor = null) {
-  // console.log("---------------------------------------------------");
-  // console.log(`📥 FETCHING PAGE for resource: ${resource}`);
-  // console.log(`➡️ Using cursor:`, cursor || "NULL (first page)");
-  // console.log("---------------------------------------------------");
+
   const count = await fetchResourceCount(admin, resource);
 
   const query = `
@@ -109,16 +104,6 @@ export async function fetchAllItemIds(admin, resource, cursor = null) {
   const items = edges.map((e) => e.node);
   const hasMore = data.pageInfo.hasNextPage;
   const nextCursor = hasMore ? edges.at(-1).cursor : null;
-
-  // // ⭐ SUPER CLEAN LOGGING
-  // console.log(`📄 PAGE RESULTS`);
-  // console.log(`- items returned: ${items.length}`);
-  // console.log(`- first ID: ${items[0]?.id || "none"}`);
-  // console.log(`- last ID : ${items[items.length - 1]?.id || "none"}`);
-  // console.log(`- nextCursor:`, nextCursor || "NONE");
-  // console.log(`- hasMore:`, hasMore);
-  // console.log("---------------------------------------------------");
-
   return {
     items,
     nextCursor,
@@ -135,21 +120,17 @@ export async function removeAllMetafields(
   key,
   cursor = null,
 ) {
-  // 1. Fetch ONLY 1 page (200 items max)
   const page = await fetchAllItemIds(admin, resource, cursor);
   console.log(`➡️ Using count:`, page?.count?.count);
 
-  // Convert node IDs into metafield delete inputs
   const metafields = page.items.map((item) => ({
     ownerId: item.id,
     namespace,
     key,
   }));
 
-  // 2. Delete ONLY this batch
   const batchResults = await deleteMetafields(admin, metafields);
 
-  // 3. Return batch results + pagination info
   return {
     results: batchResults, // delete results for this batch (200 max)
     nextCursor: page.nextCursor, // cursor or null
@@ -164,19 +145,22 @@ export async function removeSpecificMetafield(
   id,
   namespace,
   key,
-  flag,
+  value,     // values to remove (used only when flag1=true)
+  type,      // metafield type
+  flag,      // ID resolution flag
+  flag1,     // REMOVE MODE FLAG (NEW)
   objectType,
 ) {
-  // Normalize flag ALWAYS
   flag = String(flag).toLowerCase() === "true";
-  console.log("Normalized flag:", flag);
+  flag1 = String(flag1).toLowerCase() === "true";
 
   let ownerId = id;
 
+  // ---------------------------------------------
+  // Resolve owner ID
+  // ---------------------------------------------
   if (!flag) {
-    console.log("Flag FALSE → resolving ID...");
     const res = await fetchResourceId(admin, objectType, id);
-
     if (!res) {
       return {
         id,
@@ -185,12 +169,122 @@ export async function removeSpecificMetafield(
         data: null,
       };
     }
-
     ownerId = res;
   }
 
-  let metafields = [{ ownerId, namespace, key }];
-  const result = await deleteMetafields(admin, metafields);
+  // =================================================
+  // 🔹 FLAG1 = TRUE → REMOVE ONLY PROVIDED VALUES
+  // =================================================
+  if (flag1) {
+    if (!type?.startsWith("list.")) {
+      return {
+        id: ownerId,
+        success: false,
+        errors: "Partial remove is supported only for list metafields",
+        data: null,
+      };
+    }
+
+    // ---------- Parse remove values ----------
+    let removeList;
+
+    if (Array.isArray(value)) {
+      removeList = value;
+    } else if (typeof value === "string" && value.trim().startsWith("[")) {
+      try {
+        removeList = JSON.parse(value);
+      } catch {
+        return {
+          id: ownerId,
+          success: false,
+          errors: "Invalid JSON for remove values",
+          data: null,
+        };
+      }
+    } else if (typeof value === "string") {
+      removeList = value
+        .split(",")
+        .map(v => v.trim())
+        .filter(Boolean);
+    }
+
+    if (!Array.isArray(removeList) || removeList.length === 0) {
+      return {
+        id: ownerId,
+        success: false,
+        errors: "No valid values provided for removal",
+        data: null,
+      };
+    }
+
+    // ---------- Fetch existing metafield ----------
+    const existingRaw = await fetchExistingMetafield(
+      admin,
+      ownerId,
+      namespace,
+      key
+    );
+
+    if (!existingRaw) {
+      return {
+        id: ownerId,
+        success: false,
+        errors: "Metafield does not exist",
+        data: null,
+      };
+    }
+
+    let existingList = [];
+    try {
+      existingList = JSON.parse(existingRaw);
+    } catch {
+      existingList = [];
+    }
+
+    // ---------- Filter values ----------
+    const filteredList = existingList.filter(
+      v => !removeList.includes(v)
+    );
+
+    // ---------- Update metafield ----------
+    const mutation = `
+      mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields { id namespace key value type }
+          userErrors { field message code }
+        }
+      }
+    `;
+
+    const updateRes = await admin.graphql(mutation, {
+      variables: {
+        metafields: [{
+          ownerId,
+          namespace,
+          key,
+          type,
+          value: JSON.stringify(filteredList),
+        }],
+      },
+    });
+
+    const json = await updateRes.json();
+    const errors = json?.data?.metafieldsSet?.userErrors || [];
+
+    return {
+      id: ownerId,
+      success: errors.length === 0,
+      data: removeList,
+      errors: errors.length ? errors.map(e => e.message).join(", ") : null,
+    };
+  }
+
+  // =================================================
+  // 🔹 FLAG1 = FALSE → FULL METAFIELD DELETE (EXISTING)
+  // =================================================
+  const result = await deleteMetafields(admin, [
+    { ownerId, namespace, key },
+  ]);
 
   return {
     id: ownerId,
@@ -198,10 +292,6 @@ export async function removeSpecificMetafield(
     data: result[0].data,
     errors: result[0].errors,
   };
-}
-
-export function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 export async function deleteMetafields(admin, metafields) {
@@ -530,40 +620,128 @@ export async function updateSpecificMetafield(
   key,
   value,
   type,
-  flag,
+  flag,    // ID resolution flag
+  flag2,   // LIST behavior flag (NEW)
   objectType,
 ) {
-  // // Normalize flag ALWAYS
   flag = String(flag).toLowerCase() === "true";
-  console.log("Normalized flag:", flag);
+  flag2 = String(flag2).toLowerCase() === "true";
 
   let identifier = id;
 
+  // ---------------------------------------------
+  // Resolve owner ID
+  // ---------------------------------------------
   if (!flag) {
     const res = await fetchResourceId(admin, objectType, id);
-
     if (!res) {
       return {
         id,
-        success: false,
-        errors: `Could not resolve ID for: ${id}`,
         key,
         value,
+        success: false,
+        errors: `Could not resolve ID for: ${id}`,
       };
     }
-
     identifier = res;
   }
 
-  // Shopify creates OR updates automatically
+  let normalizedValue;
+  let responseValue = value;
+
+  // ---------------------------------------------
+  // LIST metafield handling
+  // ---------------------------------------------
+  if (type.startsWith("list.")) {
+    let incomingList;
+
+    // Parse incoming value
+    if (Array.isArray(value)) {
+      incomingList = value;
+    } else if (typeof value === "string" && value.trim().startsWith("[")) {
+      try {
+        incomingList = JSON.parse(value);
+      } catch {
+        return {
+          id,
+          key,
+          value,
+          success: false,
+          errors: `Invalid JSON for list metafield (${type})`,
+        };
+      }
+    } else if (typeof value === "string") {
+      incomingList = value
+        .split(",")
+        .map(v => v.trim())
+        .filter(Boolean);
+    }
+
+    if (!Array.isArray(incomingList)) {
+      return {
+        id,
+        key,
+        value,
+        success: false,
+        errors: `Expected list-compatible value for (${type})`,
+      };
+    }
+
+    // ---------------------------------------------
+    // flag2 = true → FULL REPLACE
+    // ---------------------------------------------
+    if (flag2) {
+      normalizedValue = JSON.stringify(incomingList);
+      responseValue = JSON.stringify(incomingList);
+    }
+    // ---------------------------------------------
+    // flag2 = false → MERGE (existing behavior)
+    // ---------------------------------------------
+    else {
+      const existingRaw = await fetchExistingMetafield(
+        admin,
+        identifier,
+        namespace,
+        key
+      );
+
+      let existingList = [];
+      if (existingRaw) {
+        try {
+          existingList = JSON.parse(existingRaw);
+        } catch {
+          existingList = [];
+        }
+      }
+
+      const mergedList = Array.from(
+        new Set([...existingList, ...incomingList])
+      );
+
+      normalizedValue = JSON.stringify(mergedList);
+      responseValue = JSON.stringify(incomingList);
+    }
+
+  }
+  // ---------------------------------------------
+  // NON-LIST metafield → always replace
+  // ---------------------------------------------
+  else {
+    normalizedValue =
+      value === null || value === undefined ? "" : String(value);
+  }
+
+  // ---------------------------------------------
+  // Shopify mutation
+  // ---------------------------------------------
   const metafieldInput = {
     ownerId: identifier,
     namespace,
     key,
     type,
-    value,
+    value: normalizedValue,
   };
-  console.log("➡️ Metafield input:", metafieldInput, flag);
+
   const mutation = `
     mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
@@ -578,22 +756,38 @@ export async function updateSpecificMetafield(
   });
 
   const json = await updateRes.json();
-  // console.log("📥 RESPONSE:", JSON.stringify(json, null, 2));
-
   const userErrors = json?.data?.metafieldsSet?.userErrors || [];
   const success = userErrors.length === 0;
-
-  // Convert error format into a clean string
-  const errorMessage =
-    userErrors.length > 0 ? userErrors.map((e) => e.message).join(", ") : null;
 
   return {
     id,
     key,
-    value,
+    namespace,
+    value: responseValue,
     success,
-    errors: errorMessage,
+    errors: success ? null : userErrors.map(e => e.message).join(", "),
   };
+}
+
+async function fetchExistingMetafield(admin, ownerId, namespace, key) {
+  const query = `
+    query getMetafield($id: ID!, $namespace: String!, $key: String!) {
+      node(id: $id) {
+        ... on HasMetafields {
+          metafield(namespace: $namespace, key: $key) {
+            value
+          }
+        }
+      }
+    }
+  `;
+
+  const res = await admin.graphql(query, {
+    variables: { id: ownerId, namespace, key },
+  });
+
+  const json = await res.json();
+  return json?.data?.node?.metafield?.value ?? null;
 }
 
 export async function fetchResourceId(admin, objectType, value) {

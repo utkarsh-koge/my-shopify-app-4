@@ -5,7 +5,6 @@ export async function action({ request }) {
     const formData = await request.formData();
     const rawId = formData.get("rowId");
 
-    // Validate ID
     const id = Number(rawId);
     if (!id || isNaN(id)) {
       return Response.json(
@@ -15,7 +14,6 @@ export async function action({ request }) {
     }
 
     try {
-      // Soft delete: Update restore flag to false
       await prisma.database.update({
         where: { id },
         data: { restore: false },

@@ -1,20 +1,23 @@
 import { useState, useEffect } from "react";
-import { useFetcher, useNavigate, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData, useNavigate } from "react-router";
 import { authenticate } from "../shopify.server";
 import ConfirmationModal from "../componant/confirmationmodal";
+import AlertModal from "app/componant/alert-modal";
 import {
   fetchDefinitions,
   queryMap,
   removeAllMetafields,
   removeSpecificMetafield,
   updateSpecificMetafield,
-} from "app/functions/metafield-clear-action";
+} from "app/functions/metafield-manage-action";
 import {
   MetafieldFetcherUI,
   MetafieldListUI,
   MetafieldRemoverUI,
   CompletionResultsUI,
-} from "app/componant/metafield-clear-form";
+  MetafieldEmptyStateUI,
+  MetafieldLoadingUI,
+} from "app/componant/metafield-manage-form";
 import Navbar from "app/componant/app-nav";
 import type { LoaderFunctionArgs } from "react-router";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -23,7 +26,6 @@ import Papa from "papaparse";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     await authenticate.admin(request);
-    // eslint-disable-next-line no-undef
     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
   } catch (error) {
     console.error("Loader error:", error);
@@ -45,12 +47,8 @@ export async function action({ request }) {
     const type = formData.get("type");
     const id = formData.get("id");
     const flag = formData.get("flag");
-    console.log(flag, "...........flag");
     const resource = queryMap[objectType];
-    console.log(resource, "...........resource");
-    // -----------------------------------------------------
     // REMOVE ALL METAFIELDS (PAGINATED)
-    // -----------------------------------------------------
     if (mode === "removeMetafield") {
       const cursor = formData.get("cursor") || null;
 
@@ -65,33 +63,36 @@ export async function action({ request }) {
       return { success: true, payload };
     }
 
-    // -----------------------------------------------------
     // REMOVE SPECIFIC METAFIELD (ONE ID)
-    // -----------------------------------------------------
     if (mode === "removeMetafieldSpecific") {
       if (!id) {
         return { success: false, message: "No ID provided" };
       }
+
+      const flag1 = formData.get("flag1");
 
       const payload = await removeSpecificMetafield(
         admin,
         id,
         namespace,
         key,
+        value,
+        type,
         flag,
+        flag1,
         objectType,
       );
 
       return { success: payload.success, payload };
     }
 
-    // -----------------------------------------------------
     // UPDATE SPECIFIC METAFIELD (ONE ID)
-    // -----------------------------------------------------
     if (mode === "updateMetafieldSpecific") {
       if (!id) {
         return { success: false, message: "No ID provided" };
       }
+
+      const flag2 = formData.get("flag2");
 
       const payload = await updateSpecificMetafield(
         admin,
@@ -101,15 +102,14 @@ export async function action({ request }) {
         value,
         type,
         flag,
+        flag2,
         objectType,
       );
 
       return { success: payload.success, payload };
     }
 
-    // -----------------------------------------------------
     // DEFAULT ACTION — FETCH DEFINITIONS
-    // -----------------------------------------------------
     const payload = await fetchDefinitions(admin, resource);
     return { success: true, payload };
   } catch (err) {
@@ -123,30 +123,34 @@ export async function action({ request }) {
 
 export default function SingleMetafieldViewer() {
   const fetcher = useFetcher();
+  const navigate = useNavigate();
   const { apiKey } = useLoaderData<typeof loader>();
-
   const [objectType, setObjectType] = useState("product");
   const [metafields, setMetafields] = useState([]);
   const [selectedMetafield, setSelectedMetafield] = useState(null);
   const [removeMode, setRemoveMode] = useState("all");
+  const [listUpdateMode, setListUpdateMode] = useState("merge");
+  const [listRemoveMode, setListRemoveMode] = useState("full");
   const [csvRows, setCsvRows] = useState([]);
   const [modalState, setModalState] = useState({ isOpen: false });
+  const [alertState, setAlertState] = useState({ isOpen: false, title: "", message: "" });
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [accumulatedResults, setAccumulatedResults] = useState([]);
-  const loading = fetcher.state === "submitting";
   const [csvType, setcsvType] = useState("Id"); // default selected
   const [specificField, setSpecificField] = useState("Id"); // default selected
   const [resourceCount, setResourceCount] = useState(0);
   const [csvData, setCsvData] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
-  // Prevent reload/close while running
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [manualLoading, setManualLoading] = useState(false);
+  const loading = fetcher.state === "submitting" || manualLoading;
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDeleting) {
+      if (isDeleting && !completed) {
         e.preventDefault();
         e.returnValue = ""; // Chrome requires returnValue to be set
       }
@@ -158,11 +162,15 @@ export default function SingleMetafieldViewer() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [isDeleting]);
-  console.log(csvData, "........resourceCount");
+
   // --- Core Utility Functions ---
   function downloadResultsCSV(results, removeMode) {
     if (!results || results.length === 0) {
-      alert("No results to download!");
+      setAlertState({
+        isOpen: true,
+        title: "No Results",
+        message: "No results to download!",
+      });
       return;
     }
 
@@ -170,38 +178,35 @@ export default function SingleMetafieldViewer() {
     let rows = [];
     let filename = "";
 
+    // REMOVE ALL
     if (removeMode === "all") {
       headers = ["id", "success", "value", "error"];
 
       rows = results.map((r) => [
-        r.id || "",
-        r.success ? "true" : "false",
-        r.data?.value,
-        r.errors || "",
+        csvSafe(r.id),
+        csvSafe(r.success ? "true" : "false"),
+        csvSafe(r.data?.value),
+        csvSafe(r.errors),
       ]);
 
       filename = "removeAll_results";
     }
 
-    // -------------------------------
-    // DELETE (specific)
-    // -------------------------------
-    if (removeMode === "specific") {
+    // REMOVE SPECIFIC
+    else if (removeMode === "specific") {
       headers = [specificField.toLowerCase(), "success", "value", "error"];
 
       rows = results.map((r) => [
-        r.id || "",
-        r.success ? "true" : "false",
-        r.data?.value,
-        r.errors || "",
+        csvSafe(r.id),
+        csvSafe(r.success ? "true" : "false"),
+        csvSafe(r.data?.value),
+        csvSafe(r.errors),
       ]);
 
       filename = "remove_results";
     }
 
-    // -------------------------------
     // UPDATE
-    // -------------------------------
     else if (removeMode === "update") {
       headers = [
         specificField.toLowerCase(),
@@ -212,37 +217,36 @@ export default function SingleMetafieldViewer() {
       ];
 
       rows = results.map((r) => [
-        r.id || "",
-        r.key || "",
-        r.value || "",
-        r.success ? "true" : "false",
-        r.error || "",
+        csvSafe(r.id),
+        csvSafe(r.key),
+        csvSafe(r.value),
+        csvSafe(r.success ? "true" : "false"),
+        csvSafe(r.error),
       ]);
 
       filename = "update_results";
     }
 
-    // -------------------------------
-    // Build CSV
-    // -------------------------------
-    const csvArray = [headers, ...rows]
-      .map((row) => row.map((value) => `"${value}"`).join(","))
-      .join("\n");
+    // BUILD CSV
+    const csvArray = [
+      headers.map(csvSafe).join(","),
+      ...rows.map((row) => row.join(",")),
+    ].join("\n");
 
-    const blob = new Blob([csvArray], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csvArray], {
+      type: "text/csv;charset=utf-8;",
+    });
+
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
 
-    // Get time only (HH-MM-SS)
     const pad = (n) => n.toString().padStart(2, "0");
     const d = new Date();
     const timeOnly = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 
-    // Use time-only as suffix
-    filename = `${filename}-${timeOnly}.csv`;
+    link.href = url;
+    link.download = `${filename}-${timeOnly}.csv`;
 
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -250,20 +254,35 @@ export default function SingleMetafieldViewer() {
     URL.revokeObjectURL(url);
   }
 
-  // --- Handler Functions ---
+  function csvSafe(value) {
+    if (value === null || value === undefined) return "";
 
+    const str = String(value);
+
+    // Escape double quotes
+    const escaped = str.replace(/"/g, '""');
+
+    // Wrap in quotes ONLY if needed
+    if (/[",\n]/.test(escaped)) {
+      return `"${escaped}"`;
+    }
+
+    return escaped;
+  }
+
+  // --- Handler Functions ---
   const fetchMetafields = () => {
     if (!objectType) return;
     const formData = new FormData();
     formData.append("objectType", objectType);
     fetcher.submit(formData, { method: "post" });
     setCsvData(0);
+    setManualLoading(true);
     setHasSearched(false);
   };
 
   const handleMetafieldSelection = (m) => {
     setSelectedMetafield(m);
-    // Reset state for next operation
     setCsvRows([]);
     setRemoveMode("all");
     setProgress(0);
@@ -271,14 +290,17 @@ export default function SingleMetafieldViewer() {
     setCompleted(false);
     setCurrentIndex(0);
     setAccumulatedResults([]);
+    setFileName(null);
   };
 
   const handleCSVUpload = (e) => {
     const file = e.target.files?.[0];
 
-    // -----------------------------
+    if (file) {
+      setFileName(file.name);
+    }
+
     // 1. Basic validation
-    // -----------------------------
     if (!file) {
       setCsvRows([]);
       setCsvData(0);
@@ -286,43 +308,88 @@ export default function SingleMetafieldViewer() {
     }
 
     if (!file.name.toLowerCase().endsWith(".csv")) {
-      alert("Please upload a valid CSV file.");
+      setAlertState({
+        isOpen: true,
+        title: "Invalid File Type",
+        message: "Please upload a valid CSV file.",
+      });
       e.target.value = null;
       setCsvRows([]);
       setCsvData(0);
       return;
     }
 
-    // -----------------------------
-    // 2. Parse CSV (PRODUCTION)
-    // -----------------------------
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
 
       complete: (res) => {
         const normalizedField = specificField.toLowerCase();
+        let hasInvalidGid = false;
 
         const rows = res.data
           .map((row) => {
-            // Convert CSV headers to lowercase
             const normalizedRow = Object.keys(row).reduce((acc, key) => {
               acc[key.toLowerCase()] = row[key];
               return acc;
             }, {});
 
+            const rawId = normalizedRow[normalizedField];
+            const id = typeof rawId === "string" ? rawId.trim() : rawId;
+
+            if (!id) return null;
+
+            // 🔍 Shopify GID validation
+            const gidObjectType = getShopifyObjectTypeFromGid(id);
+
+            if (
+              gidObjectType &&
+              gidObjectType !== objectType.toLowerCase()
+            ) {
+              setAlertState({
+                isOpen: true,
+                title: "Invalid Shopify ID",
+                message: `The CSV contains an ID of type "${gidObjectType}", but "${objectType}" was selected.\n\nID:\n${id}`,
+              });
+
+              hasInvalidGid = true;
+              return null;
+            }
+
             return {
-              id: normalizedRow[normalizedField]?.trim(),
-              namespace: selectedMetafield.namespace,
-              key: selectedMetafield.key,
+              id,
+              namespace: selectedMetafield?.namespace,
+              key: selectedMetafield?.key,
             };
           })
-          .filter((r) => r.id);
+          .filter(Boolean);
 
-        console.log(rows, ".........rows");
+        // ⛔ Stop if invalid GID found
+        if (hasInvalidGid) {
+          setCsvRows([]);
+          setCsvData(0);
+          e.target.value = null;
+          return;
+        }
 
         if (rows.length > 5000) {
-          alert("You can only upload a maximum of 5000 records at a time.");
+          setAlertState({
+            isOpen: true,
+            title: "Limit Exceeded",
+            message: "You can only upload a maximum of 5000 records at a time.",
+          });
+          setCsvRows([]);
+          setCsvData(0);
+          e.target.value = null;
+          return;
+        }
+
+        if (rows.length === 0) {
+          setAlertState({
+            isOpen: true,
+            title: "Valid Record Not Found",
+            message: "No valid records found in the CSV file.",
+          });
           setCsvRows([]);
           setCsvData(0);
           e.target.value = null;
@@ -339,71 +406,278 @@ export default function SingleMetafieldViewer() {
 
       error: (err) => {
         console.error("CSV parsing failed:", err);
-        alert("Failed to parse CSV file.");
+        setAlertState({
+          isOpen: true,
+          title: "Parsing Error",
+          message: "Failed to parse CSV file.",
+        });
         setCsvRows([]);
         setCsvData(0);
       },
     });
-
   };
+
+  function getShopifyObjectTypeFromGid(gid) {
+    if (typeof gid !== "string") return null;
+
+    const match = gid.match(/^gid:\/\/shopify\/([^/]+)\/\d+$/);
+    return match ? match[1].toLowerCase() : null;
+  }
+
+  function normalizeMetafieldValue(typeInput, rawValue) {
+    if (rawValue == null) return null;
+
+    const type =
+      typeof typeInput === "string" ? typeInput : typeInput?.name;
+
+    const value = rawValue;
+
+    if (type?.startsWith("list.") && type.includes("_reference")) {
+      const list = value.trim().startsWith("[")
+        ? JSON.parse(value)
+        : value.split(",").map(v => v.trim()).filter(Boolean);
+
+      return JSON.stringify(list);
+    }
+
+    if (type?.includes("_reference")) {
+      if (!value.trim().startsWith("gid://")) {
+        throw new Error("Invalid GID reference");
+      }
+      return value.trim();
+    }
+
+    switch (type) {
+      case "single_line_text_field":
+        return value;
+
+      case "multi_line_text_field":
+        return value.replace(/\\n/g, "\n");
+
+      case "list.single_line_text_field":
+        return JSON.stringify(
+          value.trim().startsWith("[")
+            ? JSON.parse(value)
+            : value.split(",").map(v => v.trim()).filter(Boolean)
+        );
+
+      case "number_integer":
+        if (!Number.isInteger(Number(value))) {
+          throw new Error("Invalid integer");
+        }
+        return String(value);
+
+      case "boolean":
+        if (value === "true" || value === true) return "true";
+        if (value === "false" || value === false) return "false";
+        throw new Error("Invalid boolean");
+
+      case "date_time":
+        return value.includes("T") ? value : `${value}T00:00:00Z`;
+
+      case "json":
+        return typeof value === "string" ? value : JSON.stringify(value);
+
+      case "link": {
+        const v = value.trim();
+        if (v.startsWith("{")) return v;
+        if (/^https?:\/\//i.test(v)) {
+          return JSON.stringify({ text: "View", url: v });
+        }
+        if (v.includes("|")) {
+          const [t, gid] = v.split("|");
+          if (gid?.startsWith("gid://")) {
+            return JSON.stringify({ type: t.trim(), id: gid.trim() });
+          }
+        }
+        throw new Error("Invalid link value");
+      }
+
+      case "url":
+        if (!/^https?:\/\//i.test(value.trim())) {
+          throw new Error("Invalid URL");
+        }
+        return value.trim();
+
+      default:
+        return value;
+    }
+  }
 
   const handleupdateCSVUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file) {
+    if (!file) return;
+
+    setFileName(file.name);
+
+    if (!(file.type === "text/csv" || file.name.endsWith(".csv"))) {
+      setAlertState({
+        isOpen: true,
+        title: "Invalid File Type",
+        message: "Please upload a valid CSV file!",
+      });
+      e.target.value = null;
       setCsvRows([]);
       setCsvData(0);
       return;
     }
 
-    if (!(file.type === "text/csv" || file.name.endsWith(".csv"))) {
-      alert("Please upload a valid CSV file!");
-      e.target.value = null;
-      return setCsvRows([]);
-    }
-
     const text = await file.text();
 
-    // --- 1️⃣ READ LINES SAFELY ---
-    const lines = text.split(/\r?\n/).filter(Boolean);
+    // ONE parser only
+    const parsed = parseCSV(text);
+    if (!parsed.length) {
+      setAlertState({
+        isOpen: true,
+        title: "Empty CSV",
+        message: "CSV is empty",
+      });
+      setCsvRows([]);
+      setCsvData(0);
+      e.target.value = null;
+      return;
+    }
 
-    // --- 2️⃣ READ HEADER ---
-    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-    lines.shift(); // remove header row
+    const headers = parsed[0].map(h => h.trim().toLowerCase());
+    const dataRows = parsed.slice(1);
 
-    // Validate required header: id + value
     if (
       !headers.includes(specificField.toLowerCase()) ||
       !headers.includes("value")
     ) {
-      alert(`CSV must contain '${specificField}' and 'value' columns.`);
+      setAlertState({
+        isOpen: true,
+        title: "Missing Columns",
+        message: `CSV must contain '${specificField}' and 'value' columns.`,
+      });
+      setCsvRows([]);
+      setCsvData(0);
+      e.target.value = null;
       return;
     }
 
     const idIndex = headers.indexOf(specificField.toLowerCase());
     const valueIndex = headers.indexOf("value");
 
-    // --- 3️⃣ SMARTEST CSV PARSER: supports commas inside quotes ---
-    const parseCSVLine = (line) => {
-      const values = [];
+    let hasInvalidGid = false;
+
+    const rows = dataRows
+      .map((cols) => {
+        const rawId = cols[idIndex];
+        const id = typeof rawId === "string" ? rawId.trim() : rawId;
+        const value = cols[valueIndex];
+
+        if (!id || value === undefined) return null;
+
+        // 🔍 Shopify GID validation
+        const gidObjectType = getShopifyObjectTypeFromGid(id);
+
+        if (
+          gidObjectType &&
+          gidObjectType !== objectType.toLowerCase()
+        ) {
+          setAlertState({
+            isOpen: true,
+            title: "Invalid Shopify ID",
+            message: `The CSV contains an ID of type "${gidObjectType}", but "${objectType}" was selected.\n\nID:\n${id}`,
+          });
+
+          hasInvalidGid = true;
+          return null;
+        }
+
+        let normalizedValue;
+        let error = "";
+
+        try {
+          normalizedValue = normalizeMetafieldValue(
+            selectedMetafield.type,
+            value
+          );
+        } catch (e) {
+          error = e.message;
+        }
+
+        return {
+          id,
+          namespace: selectedMetafield.namespace,
+          key: selectedMetafield.key,
+          value: normalizedValue,
+          type: selectedMetafield.type,
+          error,
+          raw: cols,
+        };
+      })
+      .filter(Boolean);
+
+    // ⛔ Stop further execution if invalid GID found
+    if (hasInvalidGid) {
+      setCsvRows([]);
+      setCsvData(0);
+      e.target.value = null;
+      return;
+    }
+
+    if (rows.length > 5000) {
+      setAlertState({
+        isOpen: true,
+        title: "Limit Exceeded",
+        message: "Max 5000 rows allowed",
+      });
+      setCsvRows([]);
+      setCsvData(0);
+      e.target.value = null;
+      return;
+    }
+
+    if (rows.length === 0) {
+      setAlertState({
+        isOpen: true,
+        title: "Valid Record Not Found",
+        message: "No valid records found in the CSV file.",
+      });
+      setCsvRows([]);
+      setCsvData(0);
+      e.target.value = null;
+      return;
+    }
+
+    setCsvRows(rows);
+    setCsvData(rows.length);
+    setResults([]);
+    setProgress(0);
+    setCurrentIndex(0);
+    setAccumulatedResults([]);
+  };
+
+  function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+
+    return lines.map((line) => {
+      const cols = [];
       let current = "";
       let inQuotes = false;
 
       for (let i = 0; i < line.length; i++) {
         const char = line[i];
+        const next = line[i + 1];
 
-        if (char === '"' && line[i + 1] !== '"') {
-          inQuotes = !inQuotes;
-          continue;
-        }
-
-        if (char === '"' && line[i + 1] === '"') {
-          current += '"'; // escaped quote ("")
+        // escaped quote
+        if (char === '"' && next === '"') {
+          current += '"';
           i++;
           continue;
         }
 
+        // toggle quote
+        if (char === '"') {
+          inQuotes = !inQuotes;
+          continue;
+        }
+
+        // column break
         if (char === "," && !inQuotes) {
-          values.push(current.trim());
+          cols.push(current);
           current = "";
           continue;
         }
@@ -411,52 +685,27 @@ export default function SingleMetafieldViewer() {
         current += char;
       }
 
-      values.push(current.trim());
-      return values;
-    };
-
-    // --- 4️⃣ BUILD ROWS ---
-    const rows = lines.map((line) => {
-      const cols = parseCSVLine(line);
-
-      const idRaw = cols[idIndex];
-      const valueRaw = cols[valueIndex];
-
-      return {
-        id: idRaw,
-        namespace: selectedMetafield.namespace,
-        key: selectedMetafield.key,
-        value: valueRaw, // ANY TYPE: text, number, json, date, comma
-        raw: cols,
-        type: selectedMetafield.type, // store all raw columns if needed
-      };
+      cols.push(current);
+      return cols;
     });
-
-    if (!rows.length) {
-      alert("CSV file contains no valid rows!");
-      return;
-    }
-
-    if (rows.length > 5000) {
-      alert("You can only upload a maximum of 5000 records at a time.");
-      setCsvRows([]);
-      e.target.value = null;
-      return;
-    }
-    setCsvData(rows.length);
-    setCsvRows(rows);
-    setResults([]);
-    setProgress(0);
-    setCurrentIndex(0);
-    setAccumulatedResults([]);
-  };
+  }
 
   const confirmDelete = () => {
-    if (!selectedMetafield) return alert("Select a metafield!");
+    if (!selectedMetafield) {
+      return setAlertState({
+        isOpen: true,
+        title: "Selection Required",
+        message: "Select a metafield!",
+      });
+    }
 
     // CSV required for BOTH: specific delete AND update
     if (["specific", "update"].includes(removeMode) && !csvRows.length) {
-      return alert(`Upload a CSV file with ${specificField}'s (and values for update)!`);
+      return setAlertState({
+        isOpen: true,
+        title: "Missing CSV",
+        message: `Upload a CSV file with ${specificField}'s (and values for update)!`,
+      });
     }
 
     setModalState({ isOpen: true });
@@ -489,6 +738,8 @@ export default function SingleMetafieldViewer() {
     setSelectedMetafield(null);
     setCsvRows([]);
     setRemoveMode("all");
+    setListUpdateMode("merge");
+    setListRemoveMode("full");
     setProgress(0);
     setResults([]);
     setCompleted(false);
@@ -496,25 +747,47 @@ export default function SingleMetafieldViewer() {
     setCurrentIndex(0);
     setAccumulatedResults([]);
     setResourceCount(0);
-    // navigate(0)
+    setHasSearched(false);
+    setFileName(null);
   };
 
-  console.log(results, ".......progress");
+  const backToSelectedFeild = () => {
+    setSelectedMetafield(null);
+    setCsvRows([]);
+    setRemoveMode("all");
+    setListUpdateMode("merge");
+    setListRemoveMode("full");
+    setProgress(0);
+    setResults([]);
+    setCompleted(false);
+    setCurrentIndex(0);
+    setAccumulatedResults([]);
+    setResourceCount(0);
+    setHasSearched(false);
+    setFileName(null);
+  };
+
+  const handleClearCSV = () => {
+    setCsvRows([]);
+    setCsvData(0);
+    setFileName(null);
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    if (fileInput) fileInput.value = "";
+  };
+
   useEffect(() => {
-    // Only run when the request finishes
     if (fetcher.state !== "idle" || !fetcher.data) return;
 
     const data = fetcher.data;
-    // --------------------------------------------
-    // 1. Handle metafield fetch (initial load)
-    // --------------------------------------------
     if (data?.success && data?.payload?.metafields) {
       setMetafields(data.payload.metafields);
-      setHasSearched(true);
-      return;
     }
+    setHasSearched(true);
+    setManualLoading(false);
 
-    // Now we are processing delete/update operations
+
     const isSuccess = data.success ?? false;
     const response = data?.payload;
 
@@ -524,12 +797,9 @@ export default function SingleMetafieldViewer() {
       data?.error ||
       "";
 
-    // ============================================================
-    // 2. REMOVE MODE: SPECIFIC (CSV sequential)
-    // ============================================================
     if (removeMode === "specific" && isDeleting) {
       const row = response;
-
+      console.log(response, 'response')
       let updaterow = { ...row, id: csvRows[currentIndex]?.id };
 
       const newResult = { ...updaterow, success: isSuccess, error: errorMsg };
@@ -540,7 +810,6 @@ export default function SingleMetafieldViewer() {
       setProgress(Math.round(((currentIndex + 1) / csvRows.length) * 100));
 
       if (currentIndex + 1 >= csvRows.length) {
-        // Finished
         setIsDeleting(false);
         setCompleted(true);
         setSelectedMetafield(null);
@@ -548,15 +817,10 @@ export default function SingleMetafieldViewer() {
         setCurrentIndex((prev) => prev + 1);
       }
 
-      return;
     }
 
-    // ============================================================
-    // 3. UPDATE MODE: (CSV sequential)
-    // ============================================================
     if (removeMode === "update" && isDeleting) {
       const row = csvRows[currentIndex];
-      // setcurrentrow(row);
       let updaterow = { ...row, id: csvRows[currentIndex]?.id };
       console.log(updaterow, "........updaterow", currentIndex);
       const newResult = {
@@ -567,7 +831,7 @@ export default function SingleMetafieldViewer() {
       };
       console.log(row, "........newResult");
 
-      if (currentIndex + 1 < csvRows.length) {
+      if (currentIndex + 1 <= csvRows.length) {
         const updated = [...accumulatedResults, newResult];
         setAccumulatedResults(updated);
         setResults(updated);
@@ -576,7 +840,6 @@ export default function SingleMetafieldViewer() {
       setProgress(Math.round(((currentIndex + 1) / csvRows.length) * 100));
 
       if (currentIndex + 1 >= csvRows.length) {
-        // Finished
         setIsDeleting(false);
         setCompleted(true);
         setSelectedMetafield(null);
@@ -584,49 +847,29 @@ export default function SingleMetafieldViewer() {
         setCurrentIndex((prev) => prev + 1);
       }
 
-      return;
     }
 
-    // ============================================================
-    // 4. REMOVE ALL MODE (PAGINATED DELETE + REAL PROGRESS BAR)
-    // ============================================================
     if (removeMode === "all" && isDeleting) {
       const payload = data.payload;
       const batch = payload?.results ?? [];
       const nextCursor = payload?.nextCursor ?? null;
       const hasMore = payload?.hasMore ?? false;
 
-      // 🔥 NEW: TOTAL COUNT provided by the server
       const totalCount = payload?.ResourceCount ?? null;
       if (resourceCount === 0) {
         setResourceCount(totalCount);
       }
-
-      if (!Array.isArray(batch)) {
-        console.error("Invalid remove-all response:", data);
-        setIsDeleting(false);
-        setCompleted(true);
-        return;
-      }
-
-      // 1️⃣ Append batch results to accumulated results
       const updatedResults = [...accumulatedResults, ...batch];
       setAccumulatedResults(updatedResults);
       setResults(updatedResults);
-      console.log(payload, "........batch");
 
-      // 2️⃣ REAL progress bar calculation
       if (totalCount && totalCount > 0) {
         const percent = Math.round((updatedResults.length / totalCount) * 100);
         setProgress(percent);
       } else {
-        // fallback progress
         setProgress(10);
       }
-
-      // 3️⃣ If more batches remain → fetch next batch
       if (hasMore && nextCursor) {
-        console.log("➡️ Fetching next batch...");
         const formData = new FormData();
         formData.append("mode", "removeMetafield");
         formData.append("objectType", objectType);
@@ -635,23 +878,18 @@ export default function SingleMetafieldViewer() {
         formData.append("cursor", nextCursor);
 
         fetcher.submit(formData, { method: "post" });
-        return; // ⏳ WAIT FOR NEXT BATCH
+      } else {
+        setProgress(100);
+        setCompleted(true);
+        setIsDeleting(false);
+        setSelectedMetafield(null);
       }
-
-      // 4️⃣ If no more pages → finish delete process
-      console.log("✅ ALL BATCHES DELETED");
-      setProgress(100);
-      setCompleted(true);
-      setIsDeleting(false);
-      setSelectedMetafield(null);
-      return;
     }
   }, [fetcher.state, fetcher.data]);
 
   useEffect(() => {
     if (!isDeleting) return;
 
-    // remove-all does NOT use sequential loop
     if (removeMode === "all") return;
 
     if (currentIndex >= csvRows.length) {
@@ -666,11 +904,22 @@ export default function SingleMetafieldViewer() {
 
     if (removeMode === "specific") {
       formData.append("mode", "removeMetafieldSpecific");
+      if (listRemoveMode === 'partial' && selectedMetafield?.type?.name?.startsWith('list.')) {
+        formData.append("flag1", "true");
+        formData.append("value", row.value);
+      } else {
+        formData.append("flag1", "false");
+      }
     }
 
     if (removeMode === "update") {
       formData.append("mode", "updateMetafieldSpecific");
       formData.append("value", row.value);
+      if (listUpdateMode === 'replace' && selectedMetafield?.type?.name?.startsWith('list.')) {
+        formData.append("flag2", "true");
+      } else {
+        formData.append("flag2", "false");
+      }
     }
     formData.append("flag", specificField === "Id");
     formData.append("namespace", row.namespace);
@@ -689,9 +938,9 @@ export default function SingleMetafieldViewer() {
       (removeMode === "all" || removeMode === "specific")
     ) {
       const TrueResult = results.filter((r) => r?.success);
-      console.log("we arehereeeeeeeeeeeee", TrueResult);
       const Data = {
-        operation: "Metafield-removed", objectType,
+        operation: "Metafield-removed",
+        objectType,
         value: TrueResult,
       };
       if (TrueResult.length > 0) {
@@ -743,19 +992,18 @@ export default function SingleMetafieldViewer() {
     } else if (removeMode === "update") {
       setSpecificField("Id");
     }
+    setListUpdateMode("merge")
+    setListRemoveMode("full")
     setHasSearched(false);
   }, [objectType, removeMode]);
 
   const handleDownloadTemplate = () => {
-    // Freeze values at the moment of click
     const currentField = specificField;
     const currentType = csvType;
     const currentObjectType = objectType;
 
-    // Determine CSV header
     const header = currentField === "Id" ? "Id" : currentType;
 
-    // Map object types to Shopify GID resource names
     const gidMap = {
       product: "Product",
       customer: "Customer",
@@ -771,7 +1019,6 @@ export default function SingleMetafieldViewer() {
 
     const gidType = gidMap[currentObjectType] || "Unknown";
 
-    // Build sample values based on header
     let sampleValues = [];
 
     if (header === "Id") {
@@ -793,10 +1040,8 @@ export default function SingleMetafieldViewer() {
         "example5@mail.com",
       ];
     } else if (header === "Name") {
-      // ORDER NAME
       sampleValues = ["#1001", "#1002", "#1003", "#1004", "#1005"];
     } else if (header === "Handle") {
-      // For product, blog, blogPost, page
       sampleValues = [
         "sample-handle-1",
         "sample-handle-2",
@@ -805,7 +1050,6 @@ export default function SingleMetafieldViewer() {
         "sample-handle-5",
       ];
     } else if (header === "External_ID") {
-      // For company and companyLocation
       sampleValues = [
         "External_ID-1",
         "External_ID-2",
@@ -816,31 +1060,25 @@ export default function SingleMetafieldViewer() {
     }
 
     if (removeMode === "specific") {
-      // Build CSV content
       const csvContent = [header, ...sampleValues].join("\n");
 
-      // Create Blob
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
 
-      // Create download link
       const link = document.createElement("a");
       link.href = url;
 
-      // Time-only suffix (HH-MM-SS)
       const pad = (n) => n.toString().padStart(2, "0");
       const d = new Date();
       const timeOnly = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 
       link.download = `sample-${header}-template-${timeOnly}.csv`;
 
-      // Trigger download
       link.click();
       URL.revokeObjectURL(url);
     }
 
     if (removeMode === "update") {
-      // Build right-column sample values (value-1 → value-5)
       const rightColumnSamples = [
         "value-1",
         "value-2",
@@ -849,23 +1087,19 @@ export default function SingleMetafieldViewer() {
         "value-5",
       ];
 
-      // Combine into CSV rows
       const rows = [
-        `${header},Value`, // headers
+        `${header},Value`,
         ...sampleValues.map((val, i) => `${val},${rightColumnSamples[i]}`),
       ];
 
       const csvContent = rows.join("\n");
 
-      // Create Blob
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
 
-      // Create download link
       const link = document.createElement("a");
       link.href = url;
 
-      // Time-only suffix (HH-MM-SS)
       const pad = (n) => n.toString().padStart(2, "0");
       const d = new Date();
       const timeOnly = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
@@ -884,7 +1118,7 @@ export default function SingleMetafieldViewer() {
       'input[type="file"]',
     ) as HTMLInputElement;
     if (fileInput) fileInput.value = "";
-  }, [specificField, objectType, removeMode]);
+  }, [specificField, objectType, listRemoveMode, listUpdateMode, removeMode]);
 
   useEffect(() => {
     if (progress === 100 && !isDeleting) {
@@ -899,6 +1133,7 @@ export default function SingleMetafieldViewer() {
         formattedResults = TrueResult.map((r) => ({
           ...r,
           data: {
+            namespace: r.namespace,
             key: r.key,
             type: r.type,
             value: r.value,
@@ -921,81 +1156,121 @@ export default function SingleMetafieldViewer() {
       }
     }
   }, [results, isDeleting, progress]);
+  console.log("results", queryMap);
   return (
     <AppProvider embedded apiKey={apiKey}>
-      <div className="max-w-4xl mx-auto p-6 font-sans text-gray-900 border rounded-2xl mt-20">
-        <Navbar />
-        <div className="mb-8 border-b border-gray-200 pb-4 flex justify-between items-center">
-          {/* Left Side: Title and Description */}
-          <div className="text-left">
-            <h1 className="text-2xl font-bold mb-4">Metafield Viewer</h1>
+      <div className="min-h-screen bg-[#f1f2f4] p-6 font-sans relative">
+        <div className="max-w-4xl mx-auto">
+          {/* <button
+            onClick={() => navigate("/app")}
+            className="mb-6 px-4 py-2 bg-white border border-[#dfe3e8] rounded-md hover:bg-gray-50 transition text-[#202223] shadow-sm cursor-pointer text-sm font-medium flex items-center gap-2 w-fit"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Go to home
+          </button> */}
+          <Navbar />
+          <div className="flex items-center gap-4 mb-8 mt-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Metafield Viewer</h1>
+              <p className="text-gray-600 text-sm">
+                Manage and remove metafields from your store resources.
+              </p>
+            </div>
           </div>
-        </div>
-        {!selectedMetafield && !completed && (
-          <>
-            <MetafieldFetcherUI
-              objectType={objectType}
-              setObjectType={setObjectType}
-              queryMap={queryMap}
-              fetchMetafields={fetchMetafields}
-              metafields={metafields}
-              resetToHome={resetToHome}
+          {!selectedMetafield && !completed && (
+            <>
+              <MetafieldFetcherUI
+                objectType={objectType}
+                setObjectType={setObjectType}
+                queryMap={queryMap}
+                fetchMetafields={fetchMetafields}
+                metafields={metafields}
+                resetToHome={resetToHome}
+
+                loading={loading}
+                isDeleting={isDeleting}
+                hasSearched={hasSearched}
+              />
+              {loading && <MetafieldLoadingUI objectType={objectType} />}
+              {!hasSearched && metafields.length === 0 && !loading && <MetafieldEmptyStateUI />}
+              {!loading && (
+                <MetafieldListUI
+                  metafields={metafields}
+                  handleMetafieldSelection={handleMetafieldSelection}
+                  isDeleting={isDeleting}
+                />
+              )}
+            </>
+          )}
+
+          {selectedMetafield && !completed && (
+            <MetafieldRemoverUI
+              selectedMetafield={selectedMetafield}
+              removeMode={removeMode}
+              setRemoveMode={setRemoveMode}
+              handleCSVUpload={handleCSVUpload}
+              handleupdateCSVUpload={handleupdateCSVUpload}
+              confirmDelete={confirmDelete}
+              isDeleting={isDeleting}
               loading={loading}
-              isDeleting={isDeleting}
-              hasSearched={hasSearched}
+              progress={progress}
+              resetToHome={resetToHome}
+              setSpecificField={setSpecificField}
+              backToSelectedFeild={backToSelectedFeild}
+              specificField={specificField}
+              csvType={csvType}
+              handleDownloadTemplate={handleDownloadTemplate}
+              csvData={csvData}
+              results={results}
+              fileName={fileName}
+              handleClearCSV={handleClearCSV}
+              listUpdateMode={listUpdateMode}
+              setListUpdateMode={setListUpdateMode}
+              listRemoveMode={listRemoveMode}
+              setListRemoveMode={setListRemoveMode}
             />
-            <MetafieldListUI
-              metafields={metafields}
-              handleMetafieldSelection={handleMetafieldSelection}
-              isDeleting={isDeleting}
+          )}
+
+          {completed && (
+            <CompletionResultsUI
+              results={results}
+              downloadResultsCSV={downloadResultsCSV}
+              resetToHome={resetToHome}
+              removeMode={removeMode}
             />
-          </>
-        )}
-
-        {selectedMetafield && !completed && (
-          <MetafieldRemoverUI
-            selectedMetafield={selectedMetafield}
-            removeMode={removeMode}
-            setRemoveMode={setRemoveMode}
-            handleCSVUpload={handleCSVUpload}
-            handleupdateCSVUpload={handleupdateCSVUpload}
-            confirmDelete={confirmDelete}
-            isDeleting={isDeleting}
-            loading={loading}
-            progress={progress}
-            resetToHome={resetToHome}
-            setSpecificField={setSpecificField}
-            specificField={specificField}
-            csvType={csvType}
-            handleDownloadTemplate={handleDownloadTemplate}
-            csvData={csvData}
-            results={results}
+          )}
+          <ConfirmationModal
+            modalState={{
+              isOpen: modalState.isOpen,
+              title: removeMode === "update" ? "Confirm Metafield Update" : "Confirm Metafield Deletion",
+              message:
+                removeMode === "all"
+                  ? "This metafield will be deleted from ALL items. This action cannot be undone."
+                  : removeMode === "update"
+                    ? `This metafield will be updated/added for the selected ${specificField}'s in the CSV.`
+                    : `This metafield will be deleted only for the selected ${specificField}'s in the CSV.`,
+            }}
+            confirmText={removeMode === "update" ? "Update" : "Delete"}
+            cancelText="Cancel"
+            onConfirm={handleConfirm}
+            setModalState={setModalState}
+            isRemoving={loading || isDeleting}
           />
-        )}
 
-        {completed && (
-          <CompletionResultsUI
-            results={results}
-            downloadResultsCSV={downloadResultsCSV}
-            resetToHome={resetToHome}
-            removeMode={removeMode}
+          <AlertModal
+            modalState={alertState}
+            setModalState={setAlertState}
           />
-        )}
-        <ConfirmationModal
-          modalState={{
-            isOpen: modalState.isOpen,
-            title: "Confirm Metafield Deletion",
-            message:
-              removeMode === "all"
-                ? "This metafield will be deleted from ALL items. This action cannot be undone."
-                : `This metafield will be deleted only for the selected ${specificField}'s in the CSV.`,
-          }}
-          confirmText="Delete"
-          cancelText="Cancel"
-          onConfirm={handleConfirm}
-          setModalState={setModalState}
-          isRemoving={loading || isDeleting}
-        />
+        </div>
       </div>
     </AppProvider>
   );

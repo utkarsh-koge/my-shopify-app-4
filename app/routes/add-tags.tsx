@@ -6,7 +6,18 @@ import Navbar from "app/componant/app-nav";
 import type { LoaderFunctionArgs } from "react-router";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import ConfirmationModal from "../componant/confirmationmodal";
+import AlertModal from "app/componant/alert-modal";
 import { fetchResourceId } from "app/functions/remove-tag-action";
+import {
+  Upload,
+  Tag,
+  X,
+  FileDown,
+  CheckCircle2,
+  AlertCircle,
+  RotateCcw,
+  Database
+} from "lucide-react";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
@@ -88,9 +99,7 @@ export const action = async ({ request }) => {
         });
 
         const parsed = await res.json();
-
         const errors = parsed?.data?.tagsAdd?.userErrors || [];
-
         results.push({
           id: row.id,
           success: errors.length === 0,
@@ -116,23 +125,21 @@ export const action = async ({ request }) => {
   }
 };
 
+interface Result {
+  id?: string;
+  success?: boolean;
+  errors?: { message: string }[];
+  index?: number;
+}
+
 export default function SimpleTagManager() {
   const fetcher = useFetcher();
   const { apiKey } = useLoaderData<typeof loader>();
-
-  interface Result {
-    id?: string;
-    success?: boolean;
-    errors?: { message: string }[];
-    index?: number;
-  }
-
+  const navigate = useNavigate()
   const [objectType, setObjectType] = useState("product");
   const [csvData, setCsvData] = useState<{ id: string }[]>([]);
   const [results, setResults] = useState<Result[]>([]);
   const [progress, setProgress] = useState(0);
-
-  // Manual Tag Input State
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [tagError, setTagError] = useState<string | null>(null);
@@ -140,7 +147,8 @@ export default function SimpleTagManager() {
   const [specificField, setSpecificField] = useState("Id"); // default selected
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const [flag, setflag] = useState(false); // default selected
+  const [alertState, setAlertState] = useState({ isOpen: false, title: "", message: "" });
+  const [fileName, setFileName] = useState<string | null>(null);
 
   console.log(specificField, "........specificField");
   // Modal state
@@ -169,7 +177,7 @@ export default function SimpleTagManager() {
       setCurrentIndex(nextIndex);
       sendRow(nextIndex);
     } else {
-      setIsRunning(false); // ✅ Finished
+      setIsRunning(false);
     }
   }, [fetcher.data]);
 
@@ -189,14 +197,22 @@ export default function SimpleTagManager() {
     };
   }, [isRunning]);
 
+  function getShopifyObjectTypeFromGid(gid) {
+    if (typeof gid !== "string") return null;
+
+    const match = gid.match(/^gid:\/\/shopify\/([^/]+)\/\d+$/);
+    return match ? match[1].toLowerCase() : null;
+  }
+
   const handleCsvUpload = (e) => {
     const file = e.target.files?.[0];
 
-    // Clear state if user cancels file selection
+    // ❌ User cancelled file picker
     if (!file) {
       setCsvData([]);
-      setResults([]);
+      setFileName(null);
       setProgress(0);
+      setResults([]);
       return;
     }
 
@@ -205,40 +221,86 @@ export default function SimpleTagManager() {
       skipEmptyLines: true,
 
       complete: (res) => {
-        const normalizedField = specificField.toLowerCase(); // "id" or "sku"
+        const normalizedField = specificField.toLowerCase();
+        let hasError = false;
 
         const rows = res.data
           .map((row) => {
-            // Normalize CSV headers
             const normalizedRow = Object.keys(row).reduce((acc, key) => {
               acc[key.toLowerCase()] = row[key];
               return acc;
             }, {});
 
             const value = normalizedRow[normalizedField];
+            const id = typeof value === "string" ? value.trim() : value;
 
-            return {
-              id: typeof value === "string" ? value.trim() : value,
-            };
+            if (!id) return null;
+
+            const gidObjectType = getShopifyObjectTypeFromGid(id);
+
+            if (
+              gidObjectType &&
+              gidObjectType !== objectType.toLowerCase()
+            ) {
+              setAlertState({
+                isOpen: true,
+                title: "Invalid Shopify ID",
+                message: `The CSV contains an ID of type "${gidObjectType}", but "${objectType}" was selected.\n\nID:\n${id}`,
+              });
+              hasError = true;
+              return null;
+            }
+
+            return { id };
           })
-          .filter((r) => r.id);
+          .filter(Boolean);
 
-        if (rows.length > 5000) {
-          alert("You can only upload a maximum of 5000 records at a time.");
+        // ⛔ ANY validation error → reset everything
+        if (hasError) {
           setCsvData([]);
+          setFileName(null);
           setProgress(0);
           setResults([]);
           e.target.value = null;
           return;
         }
 
+        if (rows.length > 5000) {
+          setAlertState({
+            isOpen: true,
+            title: "Limit Exceeded",
+            message: "You can only upload a maximum of 5000 records at a time.",
+          });
+          setCsvData([]);
+          setFileName(null);
+          setProgress(0);
+          setResults([]);
+          e.target.value = null;
+          return;
+        }
+
+        if (rows.length === 0) {
+          setAlertState({
+            isOpen: true,
+            title: "Valid Record Not Found",
+            message: "No valid records found in the CSV file.",
+          });
+          setCsvData([]);
+          setFileName(null);
+          setProgress(0);
+          setResults([]);
+          e.target.value = null;
+          return;
+        }
+
+        // ✅ CSV is fully valid → NOW update state
+        setFileName(file.name);
         setCsvData(rows);
         setProgress(0);
         setResults([]);
       },
     });
   };
-
 
   useEffect(() => {
     setCsvData([]);
@@ -247,6 +309,7 @@ export default function SimpleTagManager() {
     setTags([]);
     setTagInput("");
     setSpecificField("Id");
+    setFileName(null);
     const fileInput = document.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement;
@@ -299,6 +362,7 @@ export default function SimpleTagManager() {
     setTags([]);
     setTagInput("");
     setSpecificField("Id");
+    setFileName(null);
     const fileInput = document.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement;
@@ -309,20 +373,23 @@ export default function SimpleTagManager() {
     setCsvData([]);
     setResults([]);
     setProgress(0);
+    setFileName(null);
     const fileInput = document.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement;
     if (fileInput) fileInput.value = "";
   };
 
-  // -----------------------------------------------------
   // 1. Open modal instead of directly running handleSubmit
-  // -----------------------------------------------------
   const openConfirmModal = () => {
     // if (!csvData.length || !tags.length) return;
     // CSV required for BOTH: specific delete AND update
     if (!csvData.length) {
-      return alert(`Upload a CSV file with ${specificField}'s.`);
+      return setAlertState({
+        isOpen: true,
+        title: "Missing CSV",
+        message: `Upload a CSV file with ${specificField}'s.`,
+      });
     }
 
     setModalState({
@@ -332,9 +399,7 @@ export default function SimpleTagManager() {
     });
   };
 
-  // -----------------------------------------------------
   // 2. Handle Confirm -> runs the original handleSubmit logic
-  // -----------------------------------------------------
   const handleConfirm = () => {
     setModalState((prev) => ({ ...prev, isOpen: false }));
 
@@ -371,9 +436,6 @@ export default function SimpleTagManager() {
   const downloadResults = () => {
     if (!results.length) return;
 
-    // ✅ Determine correct identifier header
-    const identifierHeader = specificField === "Id" ? "Id" : csvType;
-    console.log(specificField, ".....identifierHeader");
     // CSV Header
     const header = [specificField, "Tags", "Success", "Error"].join(",") + "\n";
 
@@ -427,6 +489,20 @@ export default function SimpleTagManager() {
   const isFinished = progress === 100;
 
   useEffect(() => {
+    if (tags.length === 0) {
+      setCsvData([]);
+      setResults([]);
+      setProgress(0);
+      setFileName(null);
+      const fileInput = document.querySelector(
+        'input[type="file"]',
+      ) as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
+    }
+  }, [tags]);
+
+
+  useEffect(() => {
     if (objectType === "product") {
       setcsvType("Sku");
     }
@@ -442,15 +518,12 @@ export default function SimpleTagManager() {
   }, [objectType]);
 
   const handleDownloadTemplate = () => {
-    // Freeze values at the moment of click
     const currentField = specificField;
     const currentType = csvType;
     const currentObjectType = objectType;
 
-    // Determine header
     const header = currentField === "Id" ? "Id" : currentType;
     console.log(header, ".....console.");
-    // Build sample values
     let sampleValues = [];
 
     if (header === "Id") {
@@ -494,14 +567,9 @@ export default function SimpleTagManager() {
       ];
     }
 
-    // Build CSV
     const csvContent = [header, ...sampleValues].join("\n");
-
-    // Create Blob
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-
-    // Create download link
     const link = document.createElement("a");
     link.href = url;
 
@@ -510,13 +578,9 @@ export default function SimpleTagManager() {
     const d = new Date();
     const timeOnly = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 
-    // Use time-only as suffix
     link.download = `sample-${header}-template-${timeOnly}.csv`;
 
-    // Trigger download
     link.click();
-
-    // Cleanup
     URL.revokeObjectURL(url);
   };
 
@@ -532,7 +596,7 @@ export default function SimpleTagManager() {
         error: ""
       }));
 
-      if (!rows.length) return; // nothing to send
+      if (!rows.length) return;
 
       const Data = {
         operation: "Tags-Added",
@@ -555,262 +619,242 @@ export default function SimpleTagManager() {
 
   return (
     <AppProvider embedded apiKey={apiKey}>
-      <div className="max-w-4xl mx-auto p-6 font-sans text-gray-900 border rounded-2xl mt-20">
-        <Navbar />
+      <Navbar />
 
-        <div className="mb-8 border-b border-gray-200 pb-4 flex justify-between items-center">
-          <div className="text-left">
-            <h1 className="text-2xl font-bold mb-4">Add bulk Tag</h1>
-          </div>
-        </div>
-
-        {/* Object Type */}
-        <div className="mb-4">
-          <label className="block mb-1 font-medium">Object Type</label>
-          <select
-            className="border px-3 py-2 rounded-md"
-            value={objectType}
-            onChange={(e) => setObjectType(e.target.value)}
-            disabled={!isFinished && csvData.length > 0}
+      <div className="min-h-screen bg-[#f1f2f4] py-10 px-4 font-sans text-[#202223] relative">
+        <div className="max-w-[800px] mx-auto space-y-6">
+          {/* <button
+            onClick={() => navigate("/app")}
+            className="mb-6 px-4 py-2 bg-white border border-[#dfe3e8] rounded-md hover:bg-gray-50 transition text-[#202223] shadow-sm cursor-pointer text-sm font-medium flex items-center gap-2 w-fit"
           >
-            <option value="product">Product</option>
-            <option value="customer">Customer</option>
-            <option value="order">Order</option>
-            <option value="blogpost">BlogPost</option>
-          </select>
-        </div>
-
-        {/* Manual Tag Input */}
-        <div
-          className={`mb-6 p-4 bg-gray-50 rounded-md border ${csvData.length > 0 ? "opacity-50" : ""}`}
-        >
-          <label className="block mb-2 font-medium">Tags to Add</label>
-          <div className="flex gap-2 mb-2">
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => {
-                setTagInput(e.target.value);
-                setTagError(null);
-              }}
-              onKeyDown={handleKeyDown}
-              disabled={isSubmitting || csvData.length > 0 || isFinished}
-              placeholder="Enter tag (Min 2 chars)"
-              className="border rounded p-2 max-w-md w-full"
-            />
-            <button
-              onClick={handleAddTag}
-              disabled={
-                isSubmitting ||
-                tagInput.trim().length < 2 ||
-                csvData.length > 0 ||
-                isFinished
-              }
-              className="bg-gray-200 hover:bg-gray-300 text-black px-4 py-2 rounded-md transition disabled:opacity-50 whitespace-nowrap"
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
             >
-              Add Tag
-            </button>
-          </div>
-          {tagError && (
-            <p className="text-red-600 text-sm mb-2">{tagError}</p>
-          )}
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Go to home
+          </button> */}
 
-          {/* Tag Pills */}
-          <div className="flex flex-wrap gap-2">
-            {tags.map((tag, idx) => (
-              <span
-                key={idx}
-                className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center gap-2"
-              >
-                {tag}
-                {!isSubmitting && csvData.length === 0 && !isFinished && (
-                  <button
-                    onClick={() => handleRemoveTag(tag)}
-                    className="hover:text-blue-900 font-bold"
-                  >
-                    ×
-                  </button>
-                )}
-              </span>
-            ))}
-            {tags.length === 0 && (
-              <span className="text-gray-400 text-sm italic">
-                No tags added yet
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* CSV Upload - Only show if tags are added */}
-        {tags.length > 0 && (
-          <div className="mb-4">
-            {/* CSV Mode Selection */}
-            <label className="block mb-1 font-medium">
-              Import CSV ({csvType} column only)
-            </label>
-
-            <div className="flex items-center gap-6 mb-2 ml-1">
-              {/* ID Option */}
-              <label
-                className={`flex items-center gap-1 ${isSubmitting ? "opacity-50" : ""}`}
-              >
-                <input
-                  type="radio"
-                  name="specificField"
-                  value="ID"
-                  checked={specificField === "Id"}
-                  onChange={() => setSpecificField("Id")}
-                  disabled={isSubmitting}
-                />
-                IDs
-              </label>
-
-              {/* SKU Option */}
-              <label
-                className={`flex items-center gap-1 ${isSubmitting ? "opacity-50" : ""}`}
-              >
-                <input
-                  type="radio"
-                  name="specificField"
-                  value={csvType}
-                  checked={specificField === csvType}
-                  onChange={() => setSpecificField(csvType)}
-                  disabled={isSubmitting}
-                />
-                {csvType}
-              </label>
-
-              {/* Download Template */}
-              <button
-                type="button"
-                onClick={handleDownloadTemplate}
-                disabled={isSubmitting}
-                className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-md text-sm border"
-              >
-                Download CSV Format
-              </button>
+          {/* Header Section */}
+          <header className="flex justify-between items-end mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Bulk Tag Editor</h1>
             </div>
-            <p className="text-xs text-gray-500 mb-2">
-              (Max 5000 records allowed)
-            </p>
-            {/* CSV Upload */}
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleCsvUpload}
-              disabled={isSubmitting || isFinished}
-              className="border rounded p-2 pl-4 w-full disabled:opacity-50"
-            />
-
-            {csvData.length > 0 && (
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-sm text-green-600">
-                  {csvData.length}{" "}
-                  {specificField === "Id" ? "Ids" : `${specificField}'s`} loaded
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Progress Bar */}
-        {isSubmitting && (
-          <div className="mb-4 w-full bg-gray-200 rounded-full h-4">
-            <div
-              className="bg-green-600 h-4 rounded-full transition-all"
-              style={{ width: `${progress}%` }}
-            ></div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex gap-4">
-          {/* Submit -> Opens Modal */}
-          {!isFinished && (
-            <div className="flex items-center gap-2">
-              {/* Submit button */}
-              <button
-                onClick={openConfirmModal}
-                disabled={isSubmitting || !tags.length}
-                className={`bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 transition ${isSubmitting || !tags.length
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-                  }`}
-              >
-                {isSubmitting ? `Processing ${progress}%` : "Submit"}
-              </button>
-
-              {/* Clear CSV button */}
-              {csvData.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClearCSV}
-                  disabled={isSubmitting}
-                  className={`text-sm font-medium text-red-600 hover:text-red-700 underline ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                  title="Clear uploaded CSV"
-                >
-                  Clear CSV
-                </button>
-              )}
-
-            </div>
-          )}
-
-          {/* Clear Button - Show when finished */}
-          {isFinished && (
-            <button
-              onClick={handleClearAll}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition"
-            >
-              Clear & Start Again
-            </button>
-          )}
-        </div>
-
-        {/* Results */}
-        {results.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-lg font-semibold mb-2">Results</h2>
-
-            <div className="max-h-64 overflow-y-auto border p-3 rounded-md bg-gray-50">
-              <ul className="text-sm">
-                {results.map((r, idx) => (
-                  <li
-                    key={idx}
-                    className={`mb-1 ${r.success ? "text-green-700" : "text-red-700"
-                      }`}
-                  >
-                    <span className="font-bold mr-2">#{r.index}</span>
-                    ID: {r.id} |{" "}
-                    {r.success
-                      ? "Success"
-                      : `Error: ${r.errors?.map((e) => e.message).join("; ")}`}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
             {isFinished && (
               <button
-                onClick={downloadResults}
-                className="mt-4 border border-black hover:bg-gray-100 text-black px-4 py-2 rounded-md transition"
+                onClick={handleClearAll}
+                className="flex items-center gap-2 cursor-pointer text-sm font-medium text-red-600 hover:bg-red-50 px-3 py-2 rounded-md transition"
               >
-                Download CSV
+                <RotateCcw size={16} /> Reset Form
               </button>
             )}
-          </div>
-        )}
+          </header>
 
-        {/* ------------------------------------------- */}
-        {/* CONFIRMATION MODAL (existing component used) */}
-        {/* ------------------------------------------- */}
+          {/* Card 1: Configuration */}
+          {!isFinished && (
+            <>
+              <section className="bg-white rounded-lg shadow-sm border border-[#dfe3e8] overflow-hidden">
+                <div className="p-5 border-b border-[#f1f2f3] flex justify-between items-center bg-[#fafbfb]">
+                  <h2 className="font-semibold text-sm uppercase tracking-wider text-gray-600">1. Setup Resource</h2>
+                  <Database size={18} className="text-gray-400" />
+                </div>
+
+                <div className="p-6 space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Select Object Type</label>
+                    <select
+                      className="w-full cursor-pointer bg-white border border-[#babfc3] rounded-md px-3 py-2 focus:border-[#008060] focus:ring-1 focus:ring-[#008060] outline-none transition-all disabled:bg-gray-50"
+                      value={objectType}
+                      onChange={(e) => setObjectType(e.target.value)}
+                      disabled={isRunning || csvData.length > 0}
+                    >
+                      <option value="product">Products</option>
+                      <option value="customer">Customers</option>
+                      <option value="order">Orders</option>
+                      <option value="blogpost">Blog Posts</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Add Tags</label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1 ">
+                        <Tag className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                        <input
+                          type="text"
+                          value={tagInput}
+                          onChange={(e) => { setTagInput(e.target.value); setTagError(null); }}
+                          onKeyDown={handleKeyDown}
+                          disabled={isRunning || isFinished}
+                          placeholder="e.g. Summer-Sale, VIP"
+                          className="w-full pl-10 pr-3 py-2 border border-[#babfc3] rounded-md focus:border-black outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400"
+                        />
+                      </div>
+                      <button
+                        onClick={handleAddTag}
+                        disabled={tagInput.trim().length < 2 || isRunning || isFinished}
+                        className="bg-black  text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-800 disabled:bg-gray-200 transition cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {tagError && <p className="text-red-600 text-xs mt-2">{tagError}</p>}
+
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      {tags.map((tag) => (
+                        <span key={tag} className="inline-flex items-center  bg-[#f1f2f3] text-[#202223] px-3 py-1 rounded-full text-xs font-medium border border-[#dfe3e8]">
+                          {tag}
+                          {!isRunning && !isFinished && (
+                            <button onClick={() => handleRemoveTag(tag)} className="ml-2 hover:text-red-600 cursor-pointer">
+                              <X size={14} />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Card 2: Import */}
+              {tags.length > 0 && (
+                <section className="bg-white rounded-lg shadow-sm border border-[#dfe3e8] overflow-hidden">
+                  <div className="p-5 border-b border-[#f1f2f3] bg-[#fafbfb] flex justify-between items-center">
+                    <h2 className="font-semibold text-sm uppercase tracking-wider text-gray-600">2. Import Data</h2>
+                    <Upload size={18} className="text-gray-400" />
+                  </div>
+
+                  <div className="p-6 space-y-4">
+                    {csvData.length === 0 && (
+                      <>
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-dashed border-[#babfc3]">
+                          <div className="flex gap-4">
+                            <label className={`flex items-center gap-2 text-sm cursor-pointer ${isRunning ? "opacity-50 cursor-not-allowed" : ""}`}>
+                              <input
+                                type="radio"
+                                checked={specificField === "Id"}
+                                onChange={() => setSpecificField("Id")}
+                                className="accent-black"
+                                disabled={isRunning}
+                              />
+                              Shopify GID
+                            </label>
+                            <label className={`flex items-center gap-2 text-sm cursor-pointer ${isRunning ? "opacity-50 cursor-not-allowed" : ""}`}>
+                              <input
+                                type="radio"
+                                checked={specificField === csvType}
+                                onChange={() => setSpecificField(csvType)}
+                                className="accent-black"
+                                disabled={isRunning}
+                              />
+                              {csvType}
+                            </label>
+                          </div>
+                          <button
+                            onClick={handleDownloadTemplate}
+                            className={`text-xs cursor-pointer flex items-center gap-1 text-[#008060] font-medium hover:underline ${isRunning ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
+                            disabled={isRunning}
+                          >
+                            <FileDown size={14} /> Sample CSV
+                          </button>
+                        </div>
+
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={handleCsvUpload}
+                          disabled={isRunning || isFinished}
+                          className="block w-full text-sm text-blue-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-black hover:file:bg-gray-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                      </>
+                    )}
+
+                    {csvData.length > 0 && (
+                      <div className="flex items-center gap-2 text-blue-700 text-sm font-medium bg-blue-50 p-2 rounded border border-blue-200">
+                        <CheckCircle2 size={16} />
+                        <span className="truncate max-w-[300px]">{fileName}</span>
+                        <span className="text-gray-400">|</span>
+                        <span>{csvData.length} records ready to process</span>
+                        <button
+                          onClick={handleClearCSV}
+                          className="ml-auto text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer "
+                          disabled={isRunning}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Action Bar */}
+              <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-[#dfe3e8] shadow-sm">
+                <div className="flex-1 mr-4">
+                  {isSubmitting && (
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div className="bg-black h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={openConfirmModal}
+                  disabled={isRunning || !csvData.length}
+                  className={`px-6 py-2 rounded-md font-semibold text-sm transition ${isRunning || !csvData.length
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-black text-white hover:bg-gray-900 shadow-md cursor-pointer"
+                    }`}
+                >
+                  {isRunning ? `Processing ${progress}%` : "Run Update"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Results Card */}
+          {results.length > 0 && (
+            <section className="bg-white rounded-lg shadow-sm border border-[#dfe3e8] overflow-hidden">
+              <div className="p-5 border-b border-[#f1f2f3] flex justify-between items-center">
+                <h2 className="font-semibold text-sm">Execution Logs</h2>
+                {isFinished && (
+                  <button onClick={downloadResults} className="text-sm cursor-pointer font-medium flex items-center gap-1 text-black border border-black px-3 py-1 rounded hover:bg-gray-50">
+                    <FileDown size={14} /> Export Results
+                  </button>
+                )}
+              </div>
+              <div className="max-h-60 overflow-y-auto divide-y divide-gray-100">
+                {results.map((r, idx) => (
+                  <div key={idx} className="p-3 px-6 flex items-center justify-between text-sm">
+                    <span className="text-gray-500 tabular-nums">#{r.index}</span>
+                    <span className="flex-1 px-4 font-mono text-xs truncate">{r.id}</span>
+                    {r.success ? (
+                      <span className="text-green-700 bg-green-50 px-2 py-0.5 rounded text-xs font-medium">Success</span>
+                    ) : (
+                      <span className="text-red-700 bg-red-50 px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1">
+                        <AlertCircle size={12} /> Error
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
         <ConfirmationModal
           modalState={modalState}
           onConfirm={handleConfirm}
           setModalState={setModalState}
-          confirmText="Yes, Proceed"
-          cancelText="Cancel"
+        />
+
+        <AlertModal
+          modalState={alertState}
+          setModalState={setAlertState}
         />
       </div>
     </AppProvider>

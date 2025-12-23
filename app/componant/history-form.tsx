@@ -1,71 +1,56 @@
 import React from "react";
+import { History, Eye, RotateCcw, User, Clock, FileText, ChevronDown, ChevronUp } from "lucide-react";
 
 export function LogsTable({ logs, openRow, setOpenRow, handleRestore, isLoading }) {
+  // Stable wrapper height to prevent page jumping
+  const wrapperClass = "bg-white rounded-xl border border-[#dfe3e8] shadow-sm overflow-hidden max-w-7xl mx-auto mt-5 mb-10 flex flex-col";
+  const fixedHeight = "h-[650px]"; // Adjusted to fit roughly 10 rows + headers
+
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-10 mt-10 bg-white rounded-xl border border-gray-200 shadow-sm max-w-7xl mx-auto">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4"></div>
-        <h3 className="text-lg font-semibold text-gray-900">Loading History...</h3>
+      <div className={`${wrapperClass} ${fixedHeight} items-center justify-center`}>
+        <div className="w-10 h-10 border-4 border-gray-100 border-t-black rounded-full animate-spin mb-4"></div>
+        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">Loading History</h3>
       </div>
     );
   }
 
   if (!logs || logs.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-10 mt-10 bg-white rounded-xl border border-gray-200 shadow-sm max-w-7xl mx-auto">
-        <div className="text-gray-400 mb-4">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-            <polyline points="13 2 13 9 20 9"></polyline>
-          </svg>
+      <div className={`${wrapperClass} ${fixedHeight} items-center justify-center text-center`}>
+        <div className="bg-gray-50 p-4 rounded-full mb-4 text-gray-300">
+          <History size={48} />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900">No History Found</h3>
-        <p className="text-gray-500 mt-1">
-          Your operation history will appear here.
+        <h3 className="text-lg font-bold text-gray-900">No activity yet</h3>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs px-6">
+          Your bulk operation history and restore points will appear here.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-black overflow-hidden max-w-7xl max-h-[800px] overflow-y-auto mt-10 mx-auto">
+    <div className={`${wrapperClass} ${fixedHeight}`}>
+      {/* Fixed Header - Does not scroll */}
+      <div className="px-6 py-4 border-b border-[#f1f2f3] bg-[#fafbfb] flex items-center gap-2 shrink-0">
+        <History size={18} className="text-gray-500" />
+        <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">History table</h2>
+      </div>
 
-      <div className="w-full overflow-x-auto">
-        <table className="w-full text-sm min-w-[800px]">
-          <thead className="bg-gray-100 border-b border-black">
-            <tr>
-              <th className="p-3 text-left font-semibold text-black">User</th>
-              <th className="p-3 text-left font-semibold text-black">
-                Operation
-              </th>
-              {/* <th className="p-3 text-left font-semibold text-black">Value</th> */}
-              <th className="p-3 text-left">
-                <span className="block font-semibold text-black">Value</span>
-                <p className="text-[10px] font-medium text-gray-500 leading-tight mt-0.5">
-                  View the values
-                </p>
-              </th>
-              <th className="p-3 text-left">
-                <span className="block font-semibold text-black">Undo</span>
-                <p className="text-[10px] font-medium text-gray-500 leading-tight mt-0.5">
-                  One-time use only
-                </p>
-              </th>
-              <th className="p-3 text-left font-semibold text-black">Time</th>
+      {/* Scrollable Table Area */}
+      <div className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar">
+        <table className="w-full text-sm border-separate border-spacing-0">
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-[#fafbfb]">
+              <th className="px-6 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-[#dfe3e8] bg-[#fafbfb]">User</th>
+              <th className="px-6 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-[#dfe3e8] bg-[#fafbfb]">Operation</th>
+              <th className="px-6 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-[#dfe3e8] bg-[#fafbfb]">Details</th>
+              <th className="px-6 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-[#dfe3e8] bg-[#fafbfb]">Action</th>
+              <th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-[#dfe3e8] bg-[#fafbfb]">Timestamp</th>
             </tr>
           </thead>
 
-          <tbody>
+          <tbody className="divide-y divide-[#f1f2f3]">
             {logs.map((log, index) => (
               <React.Fragment key={log.id}>
                 <LogRow
@@ -75,53 +60,69 @@ export function LogsTable({ logs, openRow, setOpenRow, handleRestore, isLoading 
                   setOpenRow={setOpenRow}
                   handleRestore={handleRestore}
                 />
-
                 {openRow === index && <LogDetailsRow log={log} />}
               </React.Fragment>
             ))}
           </tbody>
         </table>
       </div>
+
     </div>
   );
 }
 
+// Sub-components LogRow and LogDetailsRow remain largely the same, 
+// but ensure they use standard table cells to respect the layout.
+
 export function LogRow({ log, index, openRow, setOpenRow, handleRestore }) {
+  const isOpen = openRow === index;
+
   return (
-    <tr className="hover:bg-gray-100 transition-colors border-b border-gray-300">
-      <td className="p-3 text-black break-words">{log.userName}</td>
-      <td className="p-3 text-black break-words">
-        {log.operation}
+    <tr className={`hover:bg-[#fafbfb] transition-colors ${isOpen ? 'bg-[#fafbfb]' : ''}`}>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="flex items-center gap-2 text-[#202223] font-medium">
+          <User size={14} className="text-gray-400" />
+          {log.userName}
+        </div>
+      </td>
+      <td className="px-6 py-4">
+        <span className="text-[#202223] font-semibold">{log.operation}</span>
         {log.objectType && (
-          <span className="block text-xs text-gray-500">({log.objectType})</span>
+          <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-tighter mt-0.5">
+            {log.objectType}
+          </span>
         )}
       </td>
 
-      <td className="p-3">
+      <td className="px-6 py-4">
         <button
-          onClick={() => setOpenRow(openRow === index ? null : index)}
-          className="px-3 py-1 bg-gray-100 text-black rounded shadow hover:bg-gray-200 transition text-sm border border-gray-300"
-          title="View Details"
+          onClick={() => setOpenRow(isOpen ? null : index)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border cursor-pointer border-[#dfe3e8] text-[#202223] rounded-md shadow-sm hover:bg-gray-50 transition text-xs font-bold whitespace-nowrap"
         >
-          View
+          {isOpen ? <ChevronUp size={14} /> : <Eye size={14} />}
+          {isOpen ? 'Close' : 'View Data'}
         </button>
       </td>
 
-      <td className="p-3">
+      <td className="px-6 py-4">
         <button
           onClick={() => handleRestore(log)}
           disabled={!log.restore}
-          className={`px-3 py-1 rounded-lg shadow transition w-full sm:w-auto ${log.restore
-            ? "bg-black text-white hover:bg-gray-800"
-            : "bg-gray-300 text-gray-500 cursor-not-allowed"
+          className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${log.restore
+            ? "bg-black text-white hover:bg-gray-800 shadow-md cursor-pointer"
+            : "bg-gray-100 text-gray-400 cursor-not-allowed border border-[#dfe3e8]"
             }`}
         >
+          <RotateCcw size={14} />
           Undo
         </button>
       </td>
 
-      <td className="p-3 text-black whitespace-nowrap">
-        {new Date(log.time).toLocaleString()}
+      <td className="px-6 py-4 text-right text-gray-500 font-mono text-xs">
+        <div className="flex flex-col items-end">
+          <span className="text-[#202223] font-medium">{new Date(log.time).toLocaleDateString()}</span>
+          <span className="text-[10px] text-gray-400">{new Date(log.time).toLocaleTimeString()}</span>
+        </div>
       </td>
     </tr>
   );
@@ -129,113 +130,65 @@ export function LogRow({ log, index, openRow, setOpenRow, handleRestore }) {
 
 export function LogDetailsRow({ log }) {
   return (
-    <tr className="bg-white">
-      <td colSpan={5} className="p-3 border-t border-black">
-        <div className="flex justify-center">
-          <div className="bg-white border border-black shadow-md rounded-xl p-3 max-w-3xl w-full max-h-[400px] overflow-y-auto">
-            <div className="w-full overflow-x-auto">
-              <table className="w-full text-xs border border-black min-w-[600px]">
-                <thead className="bg-gray-200 border-b border-black">
-                  <tr>
-                    <th className="p-2 border border-black font-semibold">
-                      Identifier
-                    </th>
+    <tr className="bg-[#f9fafb]">
+      <td colSpan={5} className="px-8 py-6 border-b border-[#dfe3e8]">
+        <div className="bg-white border border-[#dfe3e8] shadow-inner rounded-xl overflow-hidden max-w-4xl mx-auto">
+          <div className="px-4 py-2 bg-gray-50 border-b border-[#dfe3e8] flex items-center gap-2">
+            <FileText size={14} className="text-gray-400" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Operation Payload</span>
+          </div>
 
-                    {log.operation === "Tags-removed" ||
-                      log.operation === "Tags-Added" ? (
-                      <>
-                        <th className="p-2 border border-black font-semibold">
-                          {log.operation === "Tags-Added"
-                            ? "Added Tags"
-                            : "Removed Tags"}
-                        </th>
-                      </>
+          <div className="w-full overflow-x-auto max-h-[300px]">
+            {/* Inner table for nested data */}
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-white shadow-sm">
+                <tr>
+                  <th className="px-4 py-2 text-left font-bold text-gray-400 uppercase tracking-tighter">Resource ID</th>
+                  {log.operation === "Tags-removed" || log.operation === "Tags-Added" ? (
+                    <th className="px-4 py-2 text-left font-bold text-gray-400 uppercase tracking-tighter">
+                      {log.operation === "Tags-Added" ? "Tags Added" : "Tags Removed"}
+                    </th>
+                  ) : (
+                    <>
+                      <th className="px-4 py-2 text-left font-bold text-gray-400 uppercase tracking-tighter">Key</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-400 uppercase tracking-tighter">Value</th>
+                    </>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f1f2f3]">
+                {log.value.map((v, i) => (
+                  <tr key={i} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-mono text-[10px] text-blue-600 font-medium">{v.id}</td>
+                    {(log.operation === "Tags-removed" || log.operation === "Tags-Added") ? (
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {(log.operation === "Tags-removed" ? v.removedTags : v.tagList?.split(","))?.map((tag, idx) => (
+                            <span key={idx} className={`px-2 py-0.5 border rounded text-[9px] font-bold ${log.operation === "Tags-removed" ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100"}`}>
+                              {tag.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
                     ) : (
                       <>
-                        <th className="p-2 border border-black font-semibold">
-                          Key
-                        </th>
-                        <th className="p-2 border border-black font-semibold">
-                          Type
-                        </th>
-                        <th className="p-2 border border-black font-semibold">
-                          Value
-                        </th>
+                        <td className="px-4 py-3 font-medium text-[#202223]">
+                          {v.data?.key}
+                          <span className="block text-[9px] text-gray-400 italic">
+                            {typeof v.data?.type === "object" ? v.data?.type?.name : v.data?.type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <pre className="whitespace-pre-wrap text-[9px] bg-gray-50 p-2 rounded border border-[#dfe3e8] text-gray-600 font-mono">
+                            {v.data?.value || "—"}
+                          </pre>
+                        </td>
                       </>
                     )}
                   </tr>
-                </thead>
-
-                <tbody>
-                  {log.value.map((v, i) => (
-                    <tr key={i} className="border-b border-gray-300">
-                      {/* ID */}
-                      <td className="p-2 border border-black whitespace-nowrap">
-                        {v.id}
-                      </td>
-
-                      {log.operation === "Tags-removed" ? (
-                        <>
-                          <td className="p-2 border border-black">
-                            {v.removedTags?.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {v.removedTags.map((tag, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-2 py-0.5 bg-gray-200 text-black rounded text-[10px]"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                        </>
-                      ) : log.operation === "Tags-Added" ? (
-                        <>
-                          <td className="p-2 border border-black">
-                            {v.tagList ? (
-                              <div className="flex flex-wrap gap-1">
-                                {v.tagList.split(",").map((tag, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-2 py-0.5 bg-gray-200 text-black rounded text-[10px]"
-                                  >
-                                    {tag.trim()}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="p-2 border border-black">
-                            {v.data?.key || "—"}
-                          </td>
-
-                          <td className="p-2 border border-black">
-                            {typeof v.data?.type === "object"
-                              ? v.data?.type?.name
-                              : v.data?.type || "—"}
-                          </td>
-
-                          <td className="p-2 border border-black max-w-[200px]">
-                            <pre className="whitespace-pre-wrap text-[10px] bg-gray-100 p-1 rounded border border-gray-400">
-                              {v.data?.value ? v.data.value : "—"}
-                            </pre>
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </td>

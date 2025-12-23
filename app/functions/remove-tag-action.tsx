@@ -195,9 +195,6 @@ export async function handleRemoveFromAll(admin, formData) {
     const hasNextPage = data.pageInfo.hasNextPage;
     const nextCursor = hasNextPage ? edges.at(-1)?.cursor : null;
 
-    // console.log(`Fetched ${items.length} items`);
-    // console.log("Next page exists?", hasNextPage);
-
     const results = [];
     const mutation = `
       mutation removeTags($id: ID!, $tags: [String!]!) {
@@ -272,7 +269,6 @@ export async function handleRemoveFromAll(admin, formData) {
   }
 }
 
-/* ---------------- REMOVE TAGS FROM SPECIFIC IDS (CSV MODE) ---------------- */
 export async function handleRemoveSpecific(admin, formData) {
   const tags = JSON.parse(formData.get("tags") || []);
   const row = JSON.parse(formData.get("row") || []);
@@ -283,14 +279,11 @@ export async function handleRemoveSpecific(admin, formData) {
   if (!flag) {
     const res = await fetchResourceId(admin, resourceType, row);
     cleanId = res;
-    // console.log(JSON.stringify(res, null, 2), '..........respomse is here please you can see ', resourceType, row)
   } else {
     cleanId = row;
   }
 
   const results = [];
-  // console.log(tags, row, flag, resourceType, '.........isssssssssssssds')
-  console.log(cleanId, ".........isssssssssssssds");
 
   const getTagsQuery = `
     query GetTags($id: ID!) {
@@ -383,8 +376,6 @@ export async function handleRemoveSpecific(admin, formData) {
 }
 
 export async function fetchResourceId(admin, resourceType, value) {
-
-
   const queries = {
     customer: {
       query: `query($value: String!) {
@@ -431,33 +422,19 @@ export async function fetchResourceId(admin, resourceType, value) {
     },
   };
 
-  // Validate type
   const config = queries[resourceType];
   if (!config) {
     console.error("Unsupported resource type:", resourceType);
     throw new Error(`Unsupported resource type: ${resourceType}`);
   }
-
-  // Build the query value
   const builtValue = config.buildQuery(value);
-  // console.log("built query value:", builtValue);
-
   const variables = { value: builtValue };
-
-  // console.log("Sending GraphQL query:", config.query);
-  // console.log("With variables:", variables);
 
   // Execute GraphQL request
   const response = await admin.graphql(config.query, { variables });
   const json = await response.json();
-
-  // console.log("Raw GraphQL JSON response:", JSON.stringify(json, null, 2));
-
   // Extract ID
   const extractedId = config.path(json.data) || null;
-
-  // console.log("Extracted ID:", extractedId);
-  // console.log("=== fetchResourceId END ===");
 
   return extractedId;
 }

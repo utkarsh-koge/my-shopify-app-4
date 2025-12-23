@@ -518,6 +518,8 @@ export default function SingleMetafieldViewer() {
         message: "Please upload a valid CSV file!",
       });
       e.target.value = null;
+      setCsvRows([]);
+      setCsvData(0);
       return;
     }
 
@@ -531,6 +533,9 @@ export default function SingleMetafieldViewer() {
         title: "Empty CSV",
         message: "CSV is empty",
       });
+      setCsvRows([]);
+      setCsvData(0);
+      e.target.value = null;
       return;
     }
 
@@ -546,6 +551,9 @@ export default function SingleMetafieldViewer() {
         title: "Missing Columns",
         message: `CSV must contain '${specificField}' and 'value' columns.`,
       });
+      setCsvRows([]);
+      setCsvData(0);
+      e.target.value = null;
       return;
     }
 
@@ -617,6 +625,9 @@ export default function SingleMetafieldViewer() {
         title: "Limit Exceeded",
         message: "Max 5000 rows allowed",
       });
+      setCsvRows([]);
+      setCsvData(0);
+      e.target.value = null;
       return;
     }
 
@@ -626,6 +637,9 @@ export default function SingleMetafieldViewer() {
         title: "Valid Record Not Found",
         message: "No valid records found in the CSV file.",
       });
+      setCsvRows([]);
+      setCsvData(0);
+      e.target.value = null;
       return;
     }
 

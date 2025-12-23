@@ -353,3 +353,21 @@ export const MetafieldEmptyStateUI = () => (
     </p>
   </div>
 );
+
+export const MetafieldLoadingUI = ({ objectType }: { objectType: string }) => (
+  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-10 text-center flex flex-col items-center justify-center h-full min-h-[400px] mt-6">
+    <div className="relative mb-6">
+      <div className="w-12 h-12 border-4 border-gray-100 border-t-black rounded-full animate-spin"></div>
+      <Search size={20} className="absolute inset-0 m-auto text-gray-400" />
+    </div>
+    <h3 className="text-xl font-semibold text-gray-900 mb-2">Scanning Store Metafields</h3>
+    <p className="text-gray-500 max-w-xs mx-auto mb-4">
+      Searching through your {objectType}s to find available metafields.
+    </p>
+    <div className="flex gap-1 justify-center">
+      <span className="w-2 h-2 bg-black rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+      <span className="w-2 h-2 bg-black rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+      <span className="w-2 h-2 bg-black rounded-full animate-bounce"></span>
+    </div>
+  </div>
+);

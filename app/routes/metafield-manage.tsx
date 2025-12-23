@@ -16,6 +16,7 @@ import {
   MetafieldRemoverUI,
   CompletionResultsUI,
   MetafieldEmptyStateUI,
+  MetafieldLoadingUI,
 } from "app/componant/metafield-manage-form";
 import Navbar from "app/componant/app-nav";
 import type { LoaderFunctionArgs } from "react-router";
@@ -139,15 +140,15 @@ export default function SingleMetafieldViewer() {
   const [completed, setCompleted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [accumulatedResults, setAccumulatedResults] = useState([]);
-  const loading = fetcher.state === "submitting";
+  // const loading = fetcher.state === "submitting";
   const [csvType, setcsvType] = useState("Id"); // default selected
   const [specificField, setSpecificField] = useState("Id"); // default selected
   const [resourceCount, setResourceCount] = useState(0);
   const [csvData, setCsvData] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
-
-  // Prevent reload/close while running
+  const [manualLoading, setManualLoading] = useState(false);
+  const loading = fetcher.state === "submitting" || manualLoading;
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isDeleting && !completed) {
@@ -277,6 +278,7 @@ export default function SingleMetafieldViewer() {
     formData.append("objectType", objectType);
     fetcher.submit(formData, { method: "post" });
     setCsvData(0);
+    setManualLoading(true);
     setHasSearched(false);
   };
 
@@ -770,6 +772,7 @@ export default function SingleMetafieldViewer() {
       setMetafields(data.payload.metafields);
     }
     setHasSearched(true);
+    setManualLoading(false);
 
 
     const isSuccess = data.success ?? false;
@@ -1184,12 +1187,15 @@ export default function SingleMetafieldViewer() {
                 isDeleting={isDeleting}
                 hasSearched={hasSearched}
               />
+              {loading && <MetafieldLoadingUI objectType={objectType} />}
               {!hasSearched && metafields.length === 0 && !loading && <MetafieldEmptyStateUI />}
-              <MetafieldListUI
-                metafields={metafields}
-                handleMetafieldSelection={handleMetafieldSelection}
-                isDeleting={isDeleting}
-              />
+              {!loading && (
+                <MetafieldListUI
+                  metafields={metafields}
+                  handleMetafieldSelection={handleMetafieldSelection}
+                  isDeleting={isDeleting}
+                />
+              )}
             </>
           )}
 

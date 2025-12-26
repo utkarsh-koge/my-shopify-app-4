@@ -855,7 +855,7 @@ export async function fetchResourceId(admin, objectType, value) {
       path: (res) => res?.pages?.edges?.[0]?.node?.id,
     },
 
-    blogpost: {
+    blogPost: {
       query: `query($value: String!) {
         articles(first: 1, query: $value) {
           edges { node { id } }

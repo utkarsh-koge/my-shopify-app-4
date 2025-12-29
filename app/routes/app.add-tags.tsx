@@ -336,9 +336,20 @@ export default function SimpleTagManager() {
     });
   }, [specificField, objectType]);
 
-  const handleTagAdd = useCallback(() => {
+const handleTagAdd = useCallback(() => {
     const trimmed = tagInput.trim();
-    if (trimmed.length < 2) return;
+
+    if (trimmed.length < 2) {
+      setAlert({
+        active: true,
+        title: "Minimum Tag Length",
+        message: "A tag must contain at least 2 characters.",
+        tone: "critical",
+      });
+      return;
+    }
+
+    // if (trimmed.length < 2) return;
     if (tags.includes(trimmed)) {
       setAlert({
         active: true,
@@ -642,3 +653,4 @@ export default function SimpleTagManager() {
     </Page>
   );
 }
+

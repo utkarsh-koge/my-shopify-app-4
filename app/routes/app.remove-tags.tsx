@@ -482,6 +482,20 @@ export default function TagManager() {
   const addCondition = () => {
     const last = conditions[conditions.length - 1];
     if (last && last.tag.trim() === "") return;
+
+    const lastTag = last.tag.trim();
+    const isDuplicate = conditions.some((c, idx) => idx !== conditions.length - 1 && c.tag.trim().toLowerCase() === lastTag.toLowerCase());
+
+    if (isDuplicate) {
+      setAlert({
+        active: true,
+        title: "Duplicate Tag",
+        message: `The tag "${lastTag}" is already added.`,
+        tone: "critical",
+      });
+      return;
+    }
+
     setConditions((prev) => [...prev, { tag: "", operator: "OR" }]);
   };
   const updateCondition = (i: number, field: string, val: string) => {
@@ -493,14 +507,11 @@ export default function TagManager() {
   const validTagsEntered = conditions.filter((c) => c.tag.trim().length >= 2);
   const readyToFetch = validTagsEntered.length > 0 && conditions.every(c => c.tag.trim().length === 0 || c.tag.trim().length >= 2);
   const readyToAdd = conditions.every(c => c.tag.trim().length === 0 || c.tag.trim().length >= 2);
-
-
   // Render
   return (
     <Page
       title="Remove Tags"
       subtitle="Search for tags and remove them globally or from specific items."
-    // primaryAction={(globalResult.complete || specificEnd) ? { content: "Start New Task", onAction: resetAll } : undefined}
     >
       <Layout>
         {/* LEFT COLUMN */}
@@ -813,4 +824,3 @@ export default function TagManager() {
     </Page>
   );
 }
-

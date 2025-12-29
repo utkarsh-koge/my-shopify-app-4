@@ -278,7 +278,7 @@ export default function SimpleTagManager() {
       complete: (res) => {
         const normalizedField = specificField.toLowerCase();
         let hasError = false;
-
+        console.log('Parsed CSV Data:', normalizedField);
         const rows = res.data
           .map((row: any) => {
             const normalizedRow = Object.keys(row).reduce((acc: any, key) => {
@@ -339,9 +339,18 @@ export default function SimpleTagManager() {
   const handleTagAdd = useCallback(() => {
     const trimmed = tagInput.trim();
     if (trimmed.length < 2) return;
-    if (tags.includes(trimmed)) return;
+    if (tags.includes(trimmed)) {
+      setAlert({
+        active: true,
+        title: "Duplicate Tag",
+        message: `The tag "${trimmed}" is already added.`,
+        tone: "critical",
+      });
+      return;
+    }
     setTags((current) => [...current, trimmed]);
     setTagInput("");
+    setAlert((prev) => ({ ...prev, active: false }));
   }, [tagInput, tags]);
 
   const handleTagRemove = useCallback((tagToRemove: string) => {
@@ -470,7 +479,6 @@ export default function SimpleTagManager() {
                     }
                     disabled={isRunning || csvData.length > 0}
                     helpText="Press enter or click Add"
-                    onBlur={handleTagAdd} // Optional: add on blur as well
                   />
                   {tags.length > 0 && (
                     <InlineStack gap="200" wrap>
@@ -634,5 +642,3 @@ export default function SimpleTagManager() {
     </Page>
   );
 }
-
-

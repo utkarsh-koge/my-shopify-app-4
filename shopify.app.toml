@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "56aba0d967a4928a82d354ec774583f4"
-name = "tag-field-manager"
+name = "Tag MetaField Manager"
 application_url = "https://my-shopify-app-4-production.up.railway.app"
 embedded = true
 
@@ -22,7 +22,7 @@ api_version = "2026-01"
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 
-scopes = "write_markets,read_markets,read_content,write_content,write_products,read_customers,read_draft_orders,read_orders,read_products,read_customer_merge,write_customers,write_draft_orders,write_orders,read_content,write_content,read_locations,read_companies,write_companies,read_metaobject_definitions,write_metaobject_definitions,read_metaobjects,write_metaobjects"
+scopes = "write_markets,read_markets,read_content,write_locations,write_content,write_products,read_customers,read_draft_orders,read_orders,read_products,read_customer_merge,write_customers,write_draft_orders,write_orders,read_content,write_content,read_locations,read_companies,write_companies,read_metaobject_definitions,write_metaobject_definitions,read_metaobjects,write_metaobjects"
 
 [auth]
 redirect_urls = [ "https://my-shopify-app-4-production.up.railway.app/api/auth" ]

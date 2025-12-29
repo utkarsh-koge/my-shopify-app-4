@@ -291,7 +291,7 @@ export default function SimpleTagManager() {
             if (!id) return null;
             const type = objectType === 'blogPost' ? 'article' : objectType;
             const gidObjectType = getShopifyObjectTypeFromGid(id);
-            if (gidObjectType !== type.toLowerCase()) {
+            if (gidObjectType && gidObjectType !== type.toLowerCase()) {
               setAlert({
                 active: true,
                 title: "Invalid Shopify ID",
@@ -634,3 +634,4 @@ export default function SimpleTagManager() {
     </Page>
   );
 }
+

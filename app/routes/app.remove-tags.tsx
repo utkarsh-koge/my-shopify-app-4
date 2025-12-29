@@ -170,7 +170,23 @@ export default function TagManager() {
     else if (objectType === "customer") setCsvType("Email");
     else if (objectType === "order") setCsvType("Name");
     else if (objectType === "article") setCsvType("Handle");
+    ///
 
+    const last = conditions[conditions.length - 1];
+    if (last && last.tag.trim() === "") return;
+
+    const lastTag = last.tag.trim();
+    const isDuplicate = conditions.some((c, idx) => idx !== conditions.length - 1 && c.tag.trim().toLowerCase() === lastTag.toLowerCase());
+
+    if (isDuplicate) {
+      setAlert({
+        active: true,
+        title: "Duplicate Tag",
+        message: `The tag "${lastTag}" is already added.`,
+        tone: "critical",
+      });
+      return;
+    }
     setSpecificField("Id");
     setFileName(null);
     const fd = new FormData();
@@ -495,7 +511,7 @@ export default function TagManager() {
       });
       return;
     }
-
+    setAlert(prev => ({ ...prev, active: false }))
     setConditions((prev) => [...prev, { tag: "", operator: "OR" }]);
   };
   const updateCondition = (i: number, field: string, val: string) => {
@@ -824,4 +840,3 @@ export default function TagManager() {
     </Page>
   );
 }
-

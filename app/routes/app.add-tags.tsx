@@ -464,7 +464,7 @@ export default function SimpleTagManager() {
                     value={tagInput}
                     onChange={setTagInput}
                     autoComplete="off"
-                    placeholder="e.g. Summer-Sale"
+                    placeholder="Enter tag (Min 2 chars)"
                     connectedRight={
                       <Button onClick={handleTagAdd} disabled={!tagInput.trim()}>Add</Button>
                     }
@@ -634,4 +634,5 @@ export default function SimpleTagManager() {
     </Page>
   );
 }
+
 

@@ -375,7 +375,7 @@ export default function TagManager() {
 
     if (removalMode === "global") {
       result = globalResult?.results || [];
-      header = ["ID", "Tags", "Success", "Error"].join(",") + "\n";
+      header = ["Id", "Tags", "Success", "Error"].join(",") + "\n";
       rows = result.map((r) => {
         const id = r.id || "";
         const removedTags = Array.isArray(r.removedTags) ? r.removedTags.join(", ") : "";
@@ -824,3 +824,4 @@ export default function TagManager() {
     </Page>
   );
 }
+

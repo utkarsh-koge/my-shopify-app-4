@@ -492,6 +492,7 @@ export default function TagManager() {
   const removeCondition = (i: number) => setConditions((prev) => prev.filter((_, idx) => idx !== i));
   const validTagsEntered = conditions.filter((c) => c.tag.trim().length >= 2);
   const readyToFetch = validTagsEntered.length > 0 && conditions.every(c => c.tag.trim().length === 0 || c.tag.trim().length >= 2);
+  const readyToAdd = conditions.every(c => c.tag.trim().length === 0 || c.tag.trim().length >= 2);
 
 
   // Render
@@ -569,7 +570,7 @@ export default function TagManager() {
                   variant="plain"
                   icon={PlusIcon}
                   onClick={addCondition}
-                  disabled={isActionDisabled || fetchedItems.length > 0 || (conditions.length > 0 && conditions[conditions.length - 1].tag.trim() === "")}
+                  disabled={!readyToAdd || isActionDisabled || fetchedItems.length > 0 || (conditions.length > 0 && conditions[conditions.length - 1].tag.trim() === "")}
                 >
                   Add Another Tag
                 </Button>
@@ -812,3 +813,4 @@ export default function TagManager() {
     </Page>
   );
 }
+

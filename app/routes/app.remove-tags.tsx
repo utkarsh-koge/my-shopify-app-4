@@ -189,6 +189,7 @@ export default function TagManager() {
     }
     setSpecificField("Id");
     setFileName(null);
+    setAlert(prev => ({ ...prev, active: false }))
     const fd = new FormData();
     fd.append("mode", "fetch");
     fd.append("objectType", objectType);
@@ -656,7 +657,7 @@ export default function TagManager() {
             )}
 
             {/* 3. No Tags Found */}
-            {noTagsFound && !isFetching && fetchedItems.length === 0 && (
+            {noTagsFound && !isFetching && fetchedItems.length === 0 && !alert.active && (
               <Banner title="No tags found" tone="info" onDismiss={() => setNoTagsFound(false)}>
                 <p>Try adjusting your search conditions or Match Type.</p>
                 <Button variant="plain" onClick={resetAll}>Reset Search</Button>

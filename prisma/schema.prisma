@@ -1,0 +1,111 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model ActiveSubscription {
+  id              String   @id @default(uuid())
+  shopDomain      String   @unique
+  plan            Plan
+  subscriptionId  String
+  popupShown      Boolean  @default(false)
+  host            String?
+  updatedAt       DateTime @updatedAt
+}
+
+model SubscriptionHistory {
+  id              String   @id @default(uuid())
+  shopDomain      String
+  status          SubscriptionStatus
+  plan            Plan
+  subscriptionId  String
+  createdAt       DateTime @default(now())
+}
+
+enum Plan {
+  FREE
+  BASIC
+  ADVANCED
+}
+
+enum SubscriptionStatus {
+  CREATED
+  ACTIVATED
+  CANCELLED
+  UPGRADED
+}
+
+model FreePlanLimits {
+  id                 String   @id @default(uuid())
+  shopDomain         String   @unique
+
+  // TAG LIMITS
+  tagAdd             Int      @default(10)
+  tagRemove          Int      @default(10)
+  tagGlobal          Int      @default(5)
+
+  // METAFIELD LIMITS
+  metaUpdate         Int      @default(10)
+  metaRemove         Int      @default(10)
+  metaGlobal         Int      @default(5)
+
+  // CSV LIMITS
+  metaRemoveCsvLimit           Int      @default(250)
+  metaUpdateCsvLimit           Int      @default(250)
+  tagAddCsvLimit               Int      @default(250)
+  tagRemoveCsvLimit            Int      @default(250)
+  
+  firstUsedAt        DateTime @default(now())
+}
+
+model BasicPlanLimits {
+  id                 String   @id @default(uuid())
+  shopDomain         String   @unique
+
+  // TAG LIMITS
+  tagAdd             Int      @default(50)
+  tagRemove          Int      @default(50)
+  tagGlobal          Int      @default(25)
+
+  // METAFIELD LIMITS
+  metaUpdate         Int      @default(50)
+  metaRemove         Int      @default(50)
+  metaGlobal         Int      @default(25)
+
+  // CSV LIMITS
+  metaRemoveCsvLimit           Int      @default(1500)
+  metaUpdateCsvLimit           Int      @default(1500)
+  tagAddCsvLimit               Int      @default(1500)
+  tagRemoveCsvLimit            Int      @default(1500)
+
+  firstUsedAt        DateTime @default(now())
+}
